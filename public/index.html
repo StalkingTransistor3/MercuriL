@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Totem — verified flood-crossing intelligence · MercuriL</title>
+    <meta
+      name="description"
+      content="Totem is a low-cost sensor network and verified-closure feed for Australia's flood-prone road crossings. A MercuriL Systems project, incubated with UNSW."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <meta property="og:title" content="Totem — verified flood-crossing intelligence" />
+    <meta
+      property="og:description"
+      content="A low-cost sensor network and verified-closure feed for Australia's flood-prone road crossings."
+    />
+    <meta property="og:type" content="website" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="/" class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">Totem</span>
+          <span class="brand-sub">by MercuriL</span>
+        </a>
+        <nav class="site-nav">
+          <a href="#problem">Problem</a>
+          <a href="#solution">Solution</a>
+          <a href="#why-now">Why now</a>
+          <a href="#team">Team</a>
+          <a href="#contact" class="nav-cta">Get in touch</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container">
+          <p class="eyebrow">MercuriL Systems · incubated with UNSW</p>
+          <h1>
+            Every year, Australians drive into floodwater that no one told them was there.
+          </h1>
+          <p class="lede" data-katya-placeholder>
+            [KATYA: 2–3 sentences in your voice. The mission opener. Reference your friend if
+            you're ready to make that public; otherwise a wider frame — the recurring pattern of
+            flood fatalities on rural crossings, and why the data gap between "the water is
+            rising" and "the road is closed" is the thing we're closing. Keep it plain, not
+            marketing. Judges will Google this page.]
+          </p>
+          <div class="hero-ctas">
+            <a href="#contact" class="btn btn-primary">Start a conversation</a>
+            <a href="#solution" class="btn btn-ghost">See how it works</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="problem" class="section section-alt">
+        <div class="container narrow">
+          <h2>The problem</h2>
+          <p>
+            Navigation apps like Google Maps, Waze and Apple Maps rarely show timely,
+            verified flood-related road closures — especially in rural Australia. Under their
+            terms of service, these platforms disclaim duty of care for third-party data
+            integrity, which limits what they can safely ingest.
+          </p>
+          <p>
+            Road authorities and emergency services <em>do</em> have that duty. But their
+            closure data is fragmented across states, agencies and platforms, arrives late,
+            and rarely reaches the driver in time. Predictive flood models exist — they infer
+            conditions from rainfall, river gauges and terrain — but they can go offline
+            during the exact events that matter, and they cannot reliably tell you
+            <em>when a road is safe to reopen</em>.
+          </p>
+          <p>
+            The result is the pattern Australians know too well: cars entering water at
+            unmonitored rural crossings, avoidable strandings, and roads left closed longer
+            than they need to be.
+          </p>
+        </div>
+      </section>
+
+      <section id="solution" class="section">
+        <div class="container">
+          <h2>The solution</h2>
+          <p class="section-lede">
+            Totem pairs low-cost pole-mounted sensors at flood-prone crossings with a
+            verified-closure feed that unifies official sources and ground-truth data.
+          </p>
+
+          <div class="two-col">
+            <article class="card">
+              <h3>Totem — the hardware</h3>
+              <p>
+                Ruggedised, pole-mounted sensor modules deployed at flood-prone rural
+                crossings. Each Totem measures water depth and velocity against
+                <a
+                  href="https://www.wrl.unsw.edu.au/"
+                  target="_blank"
+                  rel="noopener"
+                  >UNSW Water Research Lab</a
+                >
+                trafficability criteria — the same thresholds used by councils and emergency
+                services to decide whether a vehicle can safely cross.
+              </p>
+              <ul class="feature-list">
+                <li>Target unit cost: <strong>AUD $50 – $150</strong> per Totem</li>
+                <li>NB-IoT + geostationary satellite comms — works with no mobile coverage</li>
+                <li>Estimated satellite data cost: under <strong>AUD $5 / month / device</strong></li>
+                <li>Designed for multi-decade service in the field</li>
+              </ul>
+            </article>
+
+            <article class="card">
+              <h3>The verified-closure feed</h3>
+              <p>
+                A middleware pipeline that aggregates official sources — Bureau of
+                Meteorology, state Departments of Transport, State Emergency Services — and
+                overlays Totem ground-truth into a single, verified closure feed.
+              </p>
+              <ul class="feature-list">
+                <li>One canonical feed per state, harmonised nationally</li>
+                <li>
+                  Available to navigation platforms under an integrity-warranted API
+                </li>
+                <li>Emergency-ops view for council + SES operators</li>
+                <li>Ground-truth reopening signal — not just closure inference</li>
+              </ul>
+            </article>
+          </div>
+
+          <div class="architecture-diagram" aria-label="System architecture diagram">
+            <div class="diagram-row">
+              <div class="diagram-node">Totem sensors<br /><small>flood-prone crossings</small></div>
+              <div class="diagram-node">BOM · DoT · SES<br /><small>official feeds</small></div>
+            </div>
+            <div class="diagram-arrow">↓</div>
+            <div class="diagram-node diagram-node--wide">
+              MercuriL verified-closure aggregator
+            </div>
+            <div class="diagram-arrow">↓</div>
+            <div class="diagram-row">
+              <div class="diagram-node">Navigation platforms</div>
+              <div class="diagram-node">Council + SES ops</div>
+              <div class="diagram-node">Insurance + logistics</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="why-now" class="section section-alt">
+        <div class="container narrow">
+          <h2>Why now</h2>
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-value">$38B → $94B</div>
+              <div class="stat-label">
+                Projected annual cost of natural disasters in Australia, rising from ~$38B
+                today to $73B by 2060 (lower-emissions) or $94B (higher-emissions).
+              </div>
+            </div>
+            <div class="stat">
+              <div class="stat-value">$200M / year</div>
+              <div class="stat-label">
+                Federal <a href="https://recovery.gov.au/disaster-ready-fund" target="_blank" rel="noopener">Disaster Ready Fund</a>
+                allocation for resilience projects — scaled from $50M to $200M annually.
+              </div>
+            </div>
+            <div class="stat">
+              <div class="stat-value">Under $50k</div>
+              <div class="stat-label">
+                Threshold under which NSW councils can procure pilots via RFQ without a
+                formal tender process — the pilot corridor for Totem.
+              </div>
+            </div>
+          </div>
+          <p>
+            Low-power satellite comms, cheap sensing, and a step-change in disaster-resilience
+            funding have all landed in the same window. The technical stack that makes a
+            $50-per-node flood network viable is a 2026 thing, not a 2020 thing.
+          </p>
+        </div>
+      </section>
+
+      <section id="team" class="section">
+        <div class="container narrow">
+          <h2>Team</h2>
+          <div class="team-grid">
+            <article class="team-card">
+              <h3>Katya <span class="team-role">Founder · Hardware &amp; mission</span></h3>
+              <p data-katya-placeholder>
+                [KATYA: 2–3 sentences. Robotics background, mechatronics transfer, why you're
+                the person building this. Keep it plain. Judges + council procurement will
+                read this before they meet you.]
+              </p>
+            </article>
+            <article class="team-card">
+              <h3>Andrew Suryanto <span class="team-role">Founding operator · GTM &amp; partnerships</span></h3>
+              <p>
+                Founding engineer background, now operator across venture, community and
+                policy stacks. Runs council outreach, grant pipeline, expert-bench
+                recruitment, and the commercial architecture behind Totem's pilot corridor.
+              </p>
+            </article>
+            <article class="team-card team-card--open">
+              <h3>Advisors &amp; expert bench <span class="team-role">Open</span></h3>
+              <p>
+                We're currently forming an expert bench across flood engineering, council
+                infrastructure and hardware manufacturing. If you've operated in one of
+                these areas and want to help shape a national-scale ground-truth network,
+                <a href="#contact">get in touch</a>.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="contact" class="section section-contact">
+        <div class="container narrow">
+          <h2>Get in touch</h2>
+          <p class="section-lede">
+            We're actively speaking with councils, state agencies, flood-engineering experts,
+            and press. Tell us who you are and how you'd like to be involved.
+          </p>
+
+          <form id="inquire-form" class="inquire-form" novalidate>
+            <div class="field field-hp" aria-hidden="true">
+              <label for="website">Leave this field empty</label>
+              <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
+            </div>
+
+            <div class="field">
+              <label for="inquiryType">I'm getting in touch about</label>
+              <select id="inquiryType" name="inquiryType" required>
+                <option value="">Choose one…</option>
+                <option>Council pilot</option>
+                <option>Expert consultation</option>
+                <option>State agency / SES</option>
+                <option>Media</option>
+                <option>Other</option>
+              </select>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="name">Your name</label>
+                <input type="text" id="name" name="name" required autocomplete="name" />
+              </div>
+              <div class="field">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required autocomplete="email" />
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="organisation">Organisation</label>
+                <input type="text" id="organisation" name="organisation" autocomplete="organization" />
+              </div>
+              <div class="field">
+                <label for="role">Role</label>
+                <input type="text" id="role" name="role" autocomplete="organization-title" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="message">A few sentences on what you're thinking</label>
+              <textarea id="message" name="message" rows="5" required minlength="10"></textarea>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="submit-btn">Send</button>
+              <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="brand-name">Totem</span>
+            <span class="brand-sub">by MercuriL Systems</span>
+          </div>
+          <p class="footer-note">
+            A MercuriL Systems project. Currently in development with the University of New
+            South Wales.
+          </p>
+        </div>
+        <div class="footer-meta">
+          <p>© 2026 MercuriL Systems</p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="/script.js" defer></script>
+  </body>
+</html>
