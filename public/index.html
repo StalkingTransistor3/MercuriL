@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
@@ -32,9 +32,9 @@
         <nav class="site-nav">
           <a href="#problem">Problem</a>
           <a href="#solution">Solution</a>
-          <a href="#why-now">Why now</a>
+          <a href="#how">How it works</a>
           <a href="#team">Team</a>
-          <a href="#contact" class="nav-cta">Get in touch</a>
+          <a href="#contact" class="nav-cta">Talk to us</a>
         </nav>
       </div>
     </header>
@@ -42,9 +42,9 @@
     <main>
       <section class="hero">
         <div class="container">
-          <p class="eyebrow">MercuriL · incubated with UNSW</p>
+          <p class="eyebrow">// MercuriL · incubated with UNSW //</p>
           <h1>
-            Every year, Australians drive into floodwater that no one told them was there.
+            No one should drown<br />because the map was wrong.
           </h1>
           <p class="lede" data-katya-placeholder>
             [KATYA: 2–3 sentences in your voice. The mission opener. Reference your friend if
@@ -60,25 +60,41 @@
         </div>
       </section>
 
+      <div class="stat-strip">
+        <div class="container stat-strip-inner">
+          <div class="strip-stat">
+            <div class="num"><em>~100,000</em></div>
+            <div class="cap">stream crossings in NSW alone — most with no sensor, no camera, no closure signal</div>
+          </div>
+          <div class="strip-stat">
+            <div class="num"><em>$200M</em> / yr</div>
+            <div class="cap">federal Disaster Ready Fund for resilience projects — quadrupled from $50M</div>
+          </div>
+          <div class="strip-stat">
+            <div class="num"><em>$38B → $94B</em></div>
+            <div class="cap">projected annual cost of natural disasters in Australia by 2060</div>
+          </div>
+        </div>
+      </div>
+
       <section id="problem" class="section section-alt">
         <div class="container narrow">
-          <h2>The problem</h2>
+          <p class="section-kicker">// Problem //</p>
+          <h2>The road is flooded. The map says drive.</h2>
           <p>
-            Navigation apps like Google Maps, Waze and Apple Maps rarely show timely,
-            verified flood-related road closures — especially in rural Australia. Under their
-            terms of service, these platforms disclaim duty of care for third-party data
-            integrity, which limits what they can safely ingest.
+            Navigation apps rarely show timely, verified flood closures — especially in rural
+            Australia. Under their terms of service, the platforms disclaim duty of care for
+            third-party data integrity, which limits what they can safely ingest.
           </p>
           <p>
-            Road authorities and emergency services <em>do</em> have that duty. But their
+            Road authorities and emergency services <em>do</em> carry that duty. But their
             closure data is fragmented across states, agencies and platforms, arrives late,
-            and rarely reaches the driver in time. Predictive flood models exist — they infer
-            conditions from rainfall, river gauges and terrain — but they can go offline
-            during the exact events that matter, and they cannot reliably tell you
-            <em>when a road is safe to reopen</em>.
+            and rarely reaches the driver in time. Predictive flood models infer conditions
+            from rainfall, gauges and terrain — but gauges fail during the exact events that
+            matter, and inference cannot tell you <em>when a road is safe to reopen</em>.
           </p>
           <p>
-            The result is the pattern Australians know too well: cars entering water at
+            The result is a pattern Australians know too well: cars entering water at
             unmonitored rural crossings, avoidable strandings, and roads left closed longer
             than they need to be.
           </p>
@@ -87,9 +103,10 @@
 
       <section id="solution" class="section">
         <div class="container">
-          <h2>The solution</h2>
+          <p class="section-kicker">// Solution //</p>
+          <h2>Verified ground truth, delivered.</h2>
           <p class="section-lede">
-            MercuriL pairs low-cost pole-mounted sensors at flood-prone crossings with a
+            MercuriL pairs low-cost detection modules at flood-prone crossings with a
             verified-closure feed that unifies official sources and ground-truth data.
           </p>
 
@@ -105,14 +122,14 @@
                   rel="noopener"
                   >UNSW Water Research Lab</a
                 >
-                trafficability criteria — the same thresholds used by councils and emergency
-                services to decide whether a vehicle can safely cross.
+                trafficability criteria — the same thresholds councils and emergency
+                services use to decide whether a vehicle can safely cross.
               </p>
               <ul class="feature-list">
                 <li>Target unit cost: <strong>AUD $50 – $150</strong> per module</li>
                 <li>NB-IoT + geostationary satellite comms — works with no mobile coverage</li>
                 <li>Estimated satellite data cost: under <strong>AUD $5 / month / device</strong></li>
-                <li>Designed for multi-decade service in the field</li>
+                <li>IP67-rated, engineered for years of unattended field service</li>
               </ul>
             </article>
 
@@ -125,9 +142,7 @@
               </p>
               <ul class="feature-list">
                 <li>One canonical feed per state, harmonised nationally</li>
-                <li>
-                  Available to navigation platforms under an integrity-warranted API
-                </li>
+                <li>Available to navigation platforms under an integrity-warranted API</li>
                 <li>Emergency-ops view for council + SES operators</li>
                 <li>Ground-truth reopening signal — not just closure inference</li>
               </ul>
@@ -153,42 +168,52 @@
         </div>
       </section>
 
-      <section id="why-now" class="section section-alt">
-        <div class="container narrow">
-          <h2>Why now</h2>
-          <div class="stat-grid">
-            <div class="stat">
-              <div class="stat-value">$38B → $94B</div>
-              <div class="stat-label">
-                Projected annual cost of natural disasters in Australia, rising from ~$38B
-                today to $73B by 2060 (lower-emissions) or $94B (higher-emissions).
-              </div>
-            </div>
-            <div class="stat">
-              <div class="stat-value">$200M / year</div>
-              <div class="stat-label">
-                Federal <a href="https://recovery.gov.au/disaster-ready-fund" target="_blank" rel="noopener">Disaster Ready Fund</a>
-                allocation for resilience projects — scaled from $50M to $200M annually.
-              </div>
-            </div>
-            <div class="stat">
-              <div class="stat-value">Under $50k</div>
-              <div class="stat-label">
-                Threshold under which NSW councils can procure pilots via RFQ without a
-                formal tender process — the pilot corridor for MercuriL.
-              </div>
-            </div>
+      <section id="how" class="section section-alt">
+        <div class="container">
+          <p class="section-kicker">// How it works //</p>
+          <h2>From unmonitored crossing to verified feed.</h2>
+          <div class="steps-grid">
+            <article class="step">
+              <span class="step-num">01 — WE MAP</span>
+              <h3>Find the gaps</h3>
+              <p>
+                We work with councils to identify the critical crossings — where the water
+                rises, where the data isn't, and where the closure signal never reaches a
+                driver.
+              </p>
+            </article>
+            <article class="step">
+              <span class="step-num">02 — WE SENSE</span>
+              <h3>Deploy the modules</h3>
+              <p>
+                Detection modules installed at the crossings nobody monitors. Depth and
+                velocity, measured against WRL trafficability thresholds, in real time.
+              </p>
+            </article>
+            <article class="step">
+              <span class="step-num">03 — WE VERIFY</span>
+              <h3>One trusted feed</h3>
+              <p>
+                Official closures and sensor ground-truth, aggregated into a single verified
+                feed — pushed to navigation platforms and emergency operations.
+              </p>
+            </article>
+            <article class="step step--decide">
+              <span class="step-num">04 — YOU DECIDE</span>
+              <h3>Authority stays with you</h3>
+              <p>
+                The data and alerts are yours to act on. Councils and emergency services
+                keep full decision authority over closures, reopenings and public-safety
+                responses.
+              </p>
+            </article>
           </div>
-          <p>
-            Low-power satellite comms, cheap sensing, and a step-change in disaster-resilience
-            funding have all landed in the same window. The technical stack that makes a
-            $50-per-node flood network viable is a 2026 thing, not a 2020 thing.
-          </p>
         </div>
       </section>
 
       <section id="team" class="section">
         <div class="container narrow">
+          <p class="section-kicker">// Team //</p>
           <h2>Team</h2>
           <div class="team-grid">
             <article class="team-card">
@@ -222,10 +247,12 @@
 
       <section id="contact" class="section section-contact">
         <div class="container narrow">
-          <h2>Get in touch</h2>
+          <p class="section-kicker">// Contact //</p>
+          <h2>Let's talk about the crossings you can't see.</h2>
           <p class="section-lede">
-            We're actively speaking with councils, state agencies, flood-engineering experts,
-            and press. Tell us who you are and how you'd like to be involved.
+            We're in prototype phase, actively speaking with councils, state agencies,
+            flood-engineering experts and press. Tell us who you are and how you'd like to
+            be involved.
           </p>
 
           <form id="inquire-form" class="inquire-form" novalidate>
@@ -283,19 +310,29 @@
     </main>
 
     <footer class="site-footer">
-      <div class="container footer-inner">
-        <div>
-          <div class="brand">
-            <span class="brand-mark" aria-hidden="true"></span>
-            <span class="brand-name">MercuriL</span>
+      <div class="container">
+        <div class="footer-inner">
+          <div>
+            <div class="brand">
+              <span class="brand-mark" aria-hidden="true"></span>
+              <span class="brand-name">MercuriL</span>
+            </div>
+            <p class="footer-note">
+              A MercuriL project, currently in development with the University of New South
+              Wales. Verified flood-crossing intelligence for the roads nobody monitors.
+            </p>
           </div>
-          <p class="footer-note">
-            A MercuriL project, currently in development with the University of New
-            South Wales.
-          </p>
+          <div class="footer-meta">
+            <p><span class="status-line"><span class="status-dot" aria-hidden="true"></span>PROTOTYPE PHASE</span></p>
+            <p>33.9173°S, 151.2313°E</p>
+            <p>SYDNEY NSW</p>
+            <p>© 2026 MercuriL</p>
+          </div>
         </div>
-        <div class="footer-meta">
-          <p>© 2026 MercuriL</p>
+        <div class="footer-disclaimer">
+          MercuriL provides monitoring and alerting data. Road authorities, councils and
+          emergency services maintain full decision authority for all safety and operational
+          decisions.
         </div>
       </div>
     </footer>
