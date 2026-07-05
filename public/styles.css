@@ -288,6 +288,24 @@ p {
   border-color: var(--accent);
   color: var(--accent);
 }
+.hero-secondary {
+  align-self: center;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+.hero-secondary:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+.authority-line {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  margin-top: 34px;
+  text-shadow: 0 1px 12px rgba(5, 10, 18, 0.9);
+}
 
 /* Stat strip */
 .stat-strip {
@@ -303,6 +321,14 @@ p {
 }
 .strip-stat {
   text-align: left;
+}
+.force-label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  margin-bottom: 8px;
+  opacity: 0.85;
 }
 .strip-stat .num {
   font-family: var(--mono);
