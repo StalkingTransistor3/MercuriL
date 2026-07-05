@@ -1,6 +1,6 @@
-# MercuriL — Totem site
+# MercuriL — MercuriL site
 
-Landing site for **Totem**, MercuriL Systems' flood-crossing sensor network and verified-closure feed. Node/Express + static frontend + Airtable-backed intake form. Designed to deploy on Railway.
+Landing site for **MercuriL**, MercuriL' flood-crossing sensor network and verified-closure feed. Node/Express + static frontend + Airtable-backed intake form. Designed to deploy on Railway.
 
 ## Stack
 

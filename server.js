@@ -27,7 +27,8 @@ app.use(
       directives: {
         'default-src': ["'self'"],
         'script-src': ["'self'", 'https://static.cloudflareinsights.com'],
-        'style-src': ["'self'", "'unsafe-inline'"],
+        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        'font-src': ["'self'", 'https://fonts.gstatic.com'],
         'img-src': ["'self'", 'data:'],
         'connect-src': ["'self'", 'https://cloudflareinsights.com'],
       },
@@ -76,7 +77,7 @@ app.post('/api/inquire', intakeLimiter, async (req, res) => {
           Organisation: (organisation || '').trim(),
           Role: (role || '').trim(),
           Message: message.trim(),
-          Source: 'usetotem.au',
+          Source: 'mercuril.au',
         },
       },
     ],
