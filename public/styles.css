@@ -169,6 +169,7 @@ p {
     radial-gradient(ellipse 80% 55% at 65% -10%, rgba(56, 189, 248, 0.13), transparent 60%),
     radial-gradient(ellipse 50% 40% at 15% 110%, rgba(14, 165, 233, 0.07), transparent 60%);
 }
+#hero-gl,
 #hero-fx {
   position: absolute;
   inset: 0;
@@ -232,7 +233,7 @@ p {
     animation: none !important;
     transition: none !important;
   }
-  #hero-fx { display: none; }
+  #hero-fx, #hero-gl { display: none; }
 }
 .eyebrow {
   font-family: var(--mono);

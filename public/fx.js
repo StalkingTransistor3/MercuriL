@@ -139,9 +139,11 @@
   const frame = (t) => {
     if (!running) return;
 
-    /* trail fade */
-    ctx.fillStyle = 'rgba(5,10,18,0.075)';
+    /* trail fade — erase to transparent so the WebGL terrain shows through */
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0,0,0,0.09)';
     ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
 
     /* particles */
     for (const p of parts) {
@@ -226,8 +228,5 @@
 
   resize();
   window.addEventListener('resize', resize);
-  /* first paint: flood the ground so trails start clean */
-  ctx.fillStyle = '#050a12';
-  ctx.fillRect(0, 0, W, H);
   requestAnimationFrame(frame);
 })();
