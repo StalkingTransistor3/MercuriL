@@ -1,12 +1,12 @@
-# MercuriL — MercuriL site
+# MercuriL — landing site
 
-Landing site for **MercuriL**, MercuriL' flood-crossing sensor network and verified-closure feed. Node/Express + static frontend + Airtable-backed intake form. Designed to deploy on Railway.
+Landing site for **MercuriL** — a flood-crossing sensor network and verified-closure feed. Node/Express + static frontend + Neon Postgres intake form. Designed to deploy on Railway.
 
 ## Stack
 
 - Node 20+ / Express 4
 - Vanilla HTML + CSS + JS in `public/`
-- Airtable REST API for intake storage (no SDK dependency)
+- Neon Postgres (via `pg`) for intake storage; schema auto-created on boot
 - Helmet + `express-rate-limit` for basic hygiene
 
 ## Local dev
@@ -14,41 +14,40 @@ Landing site for **MercuriL**, MercuriL' flood-crossing sensor network and verif
 ```bash
 npm install
 cp .env.example .env
-# fill in AIRTABLE_TOKEN, AIRTABLE_BASE_ID, AIRTABLE_TABLE
+# fill in DATABASE_URL (Neon connection string)
 npm run dev
 # → http://localhost:3000
 ```
 
-## Airtable setup
+## Database (Neon)
 
-1. Create a new base — suggested name: **MercuriL Intake**.
-2. Rename the first table to **Inquiries** (or whatever you set in `AIRTABLE_TABLE`).
-3. Add fields (exact names matter — case-sensitive):
+Intake submissions are stored in a single `inquiries` table in a Neon Postgres
+database. **No manual setup needed** — on startup the server runs a
+`CREATE TABLE IF NOT EXISTS`, so the table is created automatically the first
+time it boots with a valid `DATABASE_URL`.
 
-   | Field name | Type |
-   | --- | --- |
-   | Inquiry Type | Single select — options: `Council pilot`, `Expert consultation`, `State agency / SES`, `Media`, `Other` |
-   | Name | Single line text |
-   | Email | Email |
-   | Organisation | Single line text |
-   | Role | Single line text |
-   | Message | Long text |
-   | Source | Single line text |
-   | Created | Created time (auto) |
+Schema:
 
-4. Create a Personal Access Token at <https://airtable.com/create/tokens>:
-   - Scopes: `data.records:write`, `schema.bases:read`
-   - Access: limit to the MercuriL Intake base only
-5. Copy the token → `AIRTABLE_TOKEN`. Base ID (starts with `app…`) from the base URL → `AIRTABLE_BASE_ID`.
+| Column | Type |
+| --- | --- |
+| `id` | `bigint` identity, primary key |
+| `inquiry_type` | `text` — one of: `Council pilot`, `Expert consultation`, `State agency / SES`, `Media`, `Other` |
+| `name` | `text` |
+| `email` | `text` |
+| `organisation` | `text` (nullable) |
+| `role` | `text` (nullable) |
+| `message` | `text` |
+| `source` | `text` |
+| `created_at` | `timestamptz` default `now()` |
+
+Get `DATABASE_URL` from the Neon dashboard → **Connection Details → Pooled connection**. Keep it secret; it only lives in `.env` (gitignored) and Railway Variables.
 
 ## Deploy to Railway
 
 1. Push this repo to GitHub (already at `StalkingTransistor3/MercuriL`).
 2. In Railway → **New Project → Deploy from GitHub** → pick this repo.
 3. Under **Variables**, set:
-   - `AIRTABLE_TOKEN`
-   - `AIRTABLE_BASE_ID`
-   - `AIRTABLE_TABLE` (default `Inquiries`)
+   - `DATABASE_URL` (the Neon pooled connection string)
 4. Railway auto-detects Node via nixpacks and runs `npm start` (see `railway.json`).
 5. Under **Settings → Networking**, generate a Railway domain (for smoke-testing) and add your custom domain when ready.
 6. Point DNS: `CNAME @ → <project>.up.railway.app` (or `A` record per Railway's instructions).

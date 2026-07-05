@@ -2,7 +2,7 @@
   "name": "mercuril-site",
   "version": "0.1.0",
   "private": true,
-  "description": "MercuriL Systems — Totem flood-detection landing site",
+  "description": "MercuriL — flood-detection landing site",
   "engines": {
     "node": ">=20"
   },
@@ -13,6 +13,7 @@
   "dependencies": {
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
-    "helmet": "^8.0.0"
+    "helmet": "^8.0.0",
+    "pg": "^8.13.1"
   }
 }
