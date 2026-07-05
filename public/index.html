@@ -41,115 +41,102 @@
 
     <main>
       <section class="hero">
-        <div class="container">
+        <canvas id="hero-fx" aria-hidden="true"></canvas>
+        <div class="container hero-content">
           <p class="eyebrow">// MercuriL · incubated with UNSW //</p>
           <h1>
             No one should drown<br />because the map was wrong.
           </h1>
           <p class="lede" data-katya-placeholder>
-            [KATYA: 2–3 sentences in your voice. The mission opener. Reference your friend if
-            you're ready to make that public; otherwise a wider frame — the recurring pattern of
-            flood fatalities on rural crossings, and why the data gap between "the water is
-            rising" and "the road is closed" is the thing we're closing. Keep it plain, not
-            marketing. Judges will Google this page.]
+            [KATYA: 2–3 sentences — the mission opener, in your voice.]
           </p>
           <div class="hero-ctas">
             <a href="#contact" class="btn btn-primary">Start a conversation</a>
             <a href="#solution" class="btn btn-ghost">See how it works</a>
           </div>
         </div>
+        <div class="hero-status" aria-hidden="true">
+          <span class="status-line"><span class="status-dot"></span>PROTOTYPE PHASE</span>
+        </div>
       </section>
 
       <div class="stat-strip">
         <div class="container stat-strip-inner">
-          <div class="strip-stat">
-            <div class="num"><em>~100,000</em></div>
-            <div class="cap">stream crossings in NSW alone — most with no sensor, no camera, no closure signal</div>
+          <div class="strip-stat reveal">
+            <div class="num">~<em data-count="100000" data-format="comma">0</em></div>
+            <div class="cap">unmonitored stream crossings, NSW alone</div>
           </div>
-          <div class="strip-stat">
-            <div class="num"><em>$200M</em> / yr</div>
-            <div class="cap">federal Disaster Ready Fund for resilience projects — quadrupled from $50M</div>
+          <div class="strip-stat reveal">
+            <div class="num">$<em data-count="200">0</em>M / yr</div>
+            <div class="cap">federal Disaster Ready Fund</div>
           </div>
-          <div class="strip-stat">
-            <div class="num"><em>$38B → $94B</em></div>
-            <div class="cap">projected annual cost of natural disasters in Australia by 2060</div>
+          <div class="strip-stat reveal">
+            <div class="num">$38B → $<em data-count="94">0</em>B</div>
+            <div class="cap">annual disaster cost by 2060</div>
+          </div>
+          <div class="strip-stat reveal">
+            <div class="num">&lt; $<em data-count="50">0</em>k</div>
+            <div class="cap">NSW council RFQ threshold — no tender needed</div>
           </div>
         </div>
       </div>
 
       <section id="problem" class="section section-alt">
-        <div class="container narrow">
+        <div class="container narrow reveal">
           <p class="section-kicker">// Problem //</p>
           <h2>The road is flooded. The map says drive.</h2>
           <p>
-            Navigation apps rarely show timely, verified flood closures — especially in rural
-            Australia. Under their terms of service, the platforms disclaim duty of care for
-            third-party data integrity, which limits what they can safely ingest.
+            Rural closures rarely reach navigation apps. The authorities who carry the duty
+            of care have the data — fragmented, late, and gone before it reaches the driver.
           </p>
           <p>
-            Road authorities and emergency services <em>do</em> carry that duty. But their
-            closure data is fragmented across states, agencies and platforms, arrives late,
-            and rarely reaches the driver in time. Predictive flood models infer conditions
-            from rainfall, gauges and terrain — but gauges fail during the exact events that
-            matter, and inference cannot tell you <em>when a road is safe to reopen</em>.
-          </p>
-          <p>
-            The result is a pattern Australians know too well: cars entering water at
-            unmonitored rural crossings, avoidable strandings, and roads left closed longer
-            than they need to be.
+            Predictive models infer. Gauges fail in the storms that matter. And nobody can
+            say when a road is safe to <em>reopen</em>.
           </p>
         </div>
       </section>
 
       <section id="solution" class="section">
         <div class="container">
-          <p class="section-kicker">// Solution //</p>
-          <h2>Verified ground truth, delivered.</h2>
-          <p class="section-lede">
-            MercuriL pairs low-cost detection modules at flood-prone crossings with a
-            verified-closure feed that unifies official sources and ground-truth data.
-          </p>
+          <div class="reveal">
+            <p class="section-kicker">// Solution //</p>
+            <h2>Verified ground truth, delivered.</h2>
+            <p class="section-lede">
+              Low-cost detection modules at the crossings nobody monitors, feeding one
+              verified closure feed.
+            </p>
+          </div>
 
           <div class="two-col">
-            <article class="card">
+            <article class="card reveal">
               <h3>The detection module</h3>
               <p>
-                Ruggedised, pole-mounted sensor modules deployed at flood-prone rural
-                crossings. Each module measures water depth and velocity against
-                <a
-                  href="https://www.wrl.unsw.edu.au/"
-                  target="_blank"
-                  rel="noopener"
-                  >UNSW Water Research Lab</a
-                >
-                trafficability criteria — the same thresholds councils and emergency
-                services use to decide whether a vehicle can safely cross.
+                Pole-mounted sensors measuring depth and velocity against
+                <a href="https://www.wrl.unsw.edu.au/" target="_blank" rel="noopener">UNSW Water Research Lab</a>
+                trafficability thresholds.
               </p>
               <ul class="feature-list">
-                <li>Target unit cost: <strong>AUD $50 – $150</strong> per module</li>
-                <li>NB-IoT + geostationary satellite comms — works with no mobile coverage</li>
-                <li>Estimated satellite data cost: under <strong>AUD $5 / month / device</strong></li>
-                <li>IP67-rated, engineered for years of unattended field service</li>
+                <li>Target cost: <strong>AUD $50 – $150</strong> per module</li>
+                <li>NB-IoT + satellite — no mobile coverage needed</li>
+                <li>IP67-rated, years of unattended service</li>
               </ul>
             </article>
 
-            <article class="card">
+            <article class="card reveal">
               <h3>The verified-closure feed</h3>
               <p>
-                A middleware pipeline that aggregates official sources — Bureau of
-                Meteorology, state Departments of Transport, State Emergency Services — and
-                overlays sensor ground-truth into a single, verified closure feed.
+                BOM, Transport and SES sources aggregated with sensor ground-truth into one
+                verified feed.
               </p>
               <ul class="feature-list">
-                <li>One canonical feed per state, harmonised nationally</li>
-                <li>Available to navigation platforms under an integrity-warranted API</li>
-                <li>Emergency-ops view for council + SES operators</li>
-                <li>Ground-truth reopening signal — not just closure inference</li>
+                <li>One canonical feed per state</li>
+                <li>Integrity-warranted API for navigation platforms</li>
+                <li>Ground-truth <strong>reopening</strong> signal — not just closure</li>
               </ul>
             </article>
           </div>
 
-          <div class="architecture-diagram" aria-label="System architecture diagram">
+          <div class="architecture-diagram reveal" aria-label="System architecture diagram">
             <div class="diagram-row">
               <div class="diagram-node">Detection modules<br /><small>flood-prone crossings</small></div>
               <div class="diagram-node">BOM · DoT · SES<br /><small>official feeds</small></div>
@@ -170,42 +157,30 @@
 
       <section id="how" class="section section-alt">
         <div class="container">
-          <p class="section-kicker">// How it works //</p>
-          <h2>From unmonitored crossing to verified feed.</h2>
+          <div class="reveal">
+            <p class="section-kicker">// How it works //</p>
+            <h2>From unmonitored crossing to verified feed.</h2>
+          </div>
           <div class="steps-grid">
-            <article class="step">
+            <article class="step reveal">
               <span class="step-num">01 — WE MAP</span>
               <h3>Find the gaps</h3>
-              <p>
-                We work with councils to identify the critical crossings — where the water
-                rises, where the data isn't, and where the closure signal never reaches a
-                driver.
-              </p>
+              <p>The crossings where water rises and no signal reaches a driver.</p>
             </article>
-            <article class="step">
+            <article class="step reveal">
               <span class="step-num">02 — WE SENSE</span>
               <h3>Deploy the modules</h3>
-              <p>
-                Detection modules installed at the crossings nobody monitors. Depth and
-                velocity, measured against WRL trafficability thresholds, in real time.
-              </p>
+              <p>Depth and velocity at the crossings nobody monitors, in real time.</p>
             </article>
-            <article class="step">
+            <article class="step reveal">
               <span class="step-num">03 — WE VERIFY</span>
               <h3>One trusted feed</h3>
-              <p>
-                Official closures and sensor ground-truth, aggregated into a single verified
-                feed — pushed to navigation platforms and emergency operations.
-              </p>
+              <p>Official closures + ground truth, pushed to apps and emergency ops.</p>
             </article>
-            <article class="step step--decide">
+            <article class="step step--decide reveal">
               <span class="step-num">04 — YOU DECIDE</span>
               <h3>Authority stays with you</h3>
-              <p>
-                The data and alerts are yours to act on. Councils and emergency services
-                keep full decision authority over closures, reopenings and public-safety
-                responses.
-              </p>
+              <p>Councils and emergency services keep full decision authority.</p>
             </article>
           </div>
         </div>
@@ -213,32 +188,29 @@
 
       <section id="team" class="section">
         <div class="container narrow">
-          <p class="section-kicker">// Team //</p>
-          <h2>Team</h2>
+          <div class="reveal">
+            <p class="section-kicker">// Team //</p>
+            <h2>Team</h2>
+          </div>
           <div class="team-grid">
-            <article class="team-card">
+            <article class="team-card reveal">
               <h3>Katya <span class="team-role">Founder · Hardware &amp; mission</span></h3>
               <p data-katya-placeholder>
-                [KATYA: 2–3 sentences. Robotics background, mechatronics transfer, why you're
-                the person building this. Keep it plain. Judges + council procurement will
-                read this before they meet you.]
+                [KATYA: 2–3 sentences — robotics background, why you're building this.]
               </p>
             </article>
-            <article class="team-card">
+            <article class="team-card reveal">
               <h3>Andrew Suryanto <span class="team-role">Founding operator · GTM &amp; partnerships</span></h3>
               <p>
-                Founding engineer background, now operator across venture, community and
-                policy stacks. Runs council outreach, grant pipeline, expert-bench
-                recruitment, and the commercial architecture behind MercuriL's pilot corridor.
+                Founding-engineer background, now operator across venture, community and
+                policy. Runs council outreach, grants and the pilot corridor.
               </p>
             </article>
-            <article class="team-card team-card--open">
+            <article class="team-card team-card--open reveal">
               <h3>Advisors &amp; expert bench <span class="team-role">Open</span></h3>
               <p>
-                We're currently forming an expert bench across flood engineering, council
-                infrastructure and hardware manufacturing. If you've operated in one of
-                these areas and want to help shape a national-scale ground-truth network,
-                <a href="#contact">get in touch</a>.
+                Forming an expert bench across flood engineering, council infrastructure and
+                hardware manufacturing. <a href="#contact">Get in touch</a>.
               </p>
             </article>
           </div>
@@ -247,15 +219,16 @@
 
       <section id="contact" class="section section-contact">
         <div class="container narrow">
-          <p class="section-kicker">// Contact //</p>
-          <h2>Let's talk about the crossings you can't see.</h2>
-          <p class="section-lede">
-            We're in prototype phase, actively speaking with councils, state agencies,
-            flood-engineering experts and press. Tell us who you are and how you'd like to
-            be involved.
-          </p>
+          <div class="reveal">
+            <p class="section-kicker">// Contact //</p>
+            <h2>Let's talk about the crossings you can't see.</h2>
+            <p class="section-lede">
+              We're in prototype phase, speaking with councils, state agencies, experts and
+              press.
+            </p>
+          </div>
 
-          <form id="inquire-form" class="inquire-form" novalidate>
+          <form id="inquire-form" class="inquire-form reveal" novalidate>
             <div class="field field-hp" aria-hidden="true">
               <label for="website">Leave this field empty</label>
               <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
@@ -318,8 +291,8 @@
               <span class="brand-name">MercuriL</span>
             </div>
             <p class="footer-note">
-              A MercuriL project, currently in development with the University of New South
-              Wales. Verified flood-crossing intelligence for the roads nobody monitors.
+              In development with the University of New South Wales. Verified
+              flood-crossing intelligence for the roads nobody monitors.
             </p>
           </div>
           <div class="footer-meta">
@@ -338,5 +311,6 @@
     </footer>
 
     <script src="/script.js" defer></script>
+    <script src="/fx.js" defer></script>
   </body>
 </html>
