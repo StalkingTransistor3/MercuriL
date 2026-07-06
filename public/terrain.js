@@ -133,8 +133,10 @@
 
   let W = 0, H = 0;
   const resize = () => {
-    /* shader is heavy per-pixel: render at capped DPR and let CSS scale */
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    /* shader is heavy per-pixel: render at capped DPR and let CSS scale.
+       Phones get a lower internal resolution — the glow hides it entirely. */
+    const cap = window.innerWidth < 700 ? 0.85 : 1.5;
+    const dpr = Math.min(window.devicePixelRatio || 1, cap);
     W = hero.clientWidth;
     H = hero.clientHeight;
     canvas.width = Math.floor(W * dpr);

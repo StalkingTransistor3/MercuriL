@@ -163,6 +163,7 @@ p {
   position: relative;
   overflow: hidden;
   min-height: calc(100vh - 70px);
+  min-height: calc(100svh - 70px);
   display: flex;
   align-items: center;
   background:
@@ -369,24 +370,6 @@ p {
   text-transform: uppercase;
   color: var(--accent);
   margin-bottom: 14px;
-}
-
-/* Serve chips */
-.serve-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 26px;
-}
-.serve-chip {
-  font-family: var(--heading);
-  font-weight: 600;
-  font-size: 0.92rem;
-  color: var(--ink-soft);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 10px 20px;
-  background: rgba(255, 255, 255, 0.02);
 }
 
 /* Cards */
@@ -744,8 +727,43 @@ button.btn:disabled {
   }
 }
 @media (max-width: 540px) {
+  body {
+    font-size: 15.5px;
+  }
   .stat-strip-inner {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px 14px;
+    padding: 26px 20px;
+  }
+  .strip-stat .num {
+    font-size: 1.35rem;
+  }
+  .strip-stat .cap {
+    font-size: 0.76rem;
+  }
+  .force-label {
+    font-size: 0.56rem;
+  }
+  .authority-line {
+    font-size: 0.6rem;
+    line-height: 2;
+  }
+  .hero-content {
+    padding-top: 40px;
+    padding-bottom: 80px;
+  }
+  .diagram-node {
+    font-size: 0.7rem;
+    padding: 10px 12px;
+  }
+  .diagram-node--wide {
+    padding: 12px 20px;
+  }
+  .section {
+    padding: 52px 0;
+  }
+  .card, .team-card {
+    padding: 22px 20px;
   }
 }
 @media (max-width: 760px) {
