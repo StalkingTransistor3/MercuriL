@@ -52,17 +52,11 @@ Get `DATABASE_URL` from the Neon dashboard → **Connection Details → Pooled c
 5. Under **Settings → Networking**, generate a Railway domain (for smoke-testing) and add your custom domain when ready.
 6. Point DNS: `CNAME @ → <project>.up.railway.app` (or `A` record per Railway's instructions).
 
-## Katya's copy — PENDING HER SIGN-OFF
+## Copy doctrine
 
-The hero lede and Katya's team bio were drafted **from her own pitch-script
-language** (the working draft in the PFC master doc), not invented — but they
-speak in her first person and reference her friend's death. **Katya must
-read and approve both before the URL is shared anywhere public.** If she
-wants the personal line off the website (stage and website are different
-exposure levels), swap the hero lede for the impersonal variant:
-
-> "Rural road closures don't reach the apps people trust. We're building the
-> sensors and the verified feed that close that gap."
+Site copy stays impersonal and factual. Katya's personal story lives in the
+stage pitch only — never on the website (decided 2026-07-06: putting it in
+marketing copy cheapens it). Keep her bio to credentials.
 
 ## Compliance guardrails (Peter Farrell Cup rubric — David Burt)
 
