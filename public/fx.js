@@ -105,7 +105,9 @@
   ];
   let nodes = [];
   const placeNodes = () => {
-    nodes = NODE_DEFS.map((d) => ({
+    /* phones get 4 nodes — less label clutter behind the headline */
+    const defs = W < 700 ? NODE_DEFS.filter((_, i) => [1, 2, 3, 5].includes(i)) : NODE_DEFS;
+    nodes = defs.map((d) => ({
       ...d,
       x: d.fx * W,
       y: d.fy * H,
@@ -197,10 +199,11 @@
         n.rings.push({ r: 0, born: t });
         n.next = t + (n.state === 'warn' ? 1400 : 2600 + Math.random() * 2600);
       }
+      const maxR = W < 700 ? 42 : 64;
       n.rings = n.rings.filter((ring) => {
         const age = (t - ring.born) / 1800;
         if (age >= 1) return false;
-        ring.r = age * 64;
+        ring.r = age * maxR;
         ctx.strokeStyle = `rgba(${col},${(0.5 * (1 - age)).toFixed(3)})`;
         ctx.beginPath();
         ctx.arc(n.x, n.y, ring.r, 0, Math.PI * 2);
