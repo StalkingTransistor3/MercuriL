@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MercuriL — mission control</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23ea4335'/%3E%3Ccircle cx='12' cy='12' r='4.5' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css">
+  <style>
+    :root { --blue:#4285f4; --red:#ea4335; --green:#34a853; --ink:#202124; --grey:#5f6368; --line:#dadce0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: Roboto, -apple-system, "Segoe UI", Arial, sans-serif; }
+    #map { position: fixed; inset: 0 0 0 340px; background: #f2f1ec; }
+    .side {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 340px;
+      background: #fff; border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; z-index: 10;
+    }
+    .side header { padding: 16px 16px 10px; border-bottom: 1px solid var(--line); }
+    .side h1 { font-size: 17px; }
+    .side h1 .l { color: var(--red); }
+    .side .hint { font-size: 12px; color: var(--grey); margin-top: 4px; }
+    .etl { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--grey); display:flex; align-items:center; gap:10px; }
+    .etl button { border: 1px solid var(--line); background: #fff; border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+    .etl button:hover { background: #f1f3f4; }
+    .list { flex: 1; overflow-y: auto; }
+    .sensor { padding: 12px 16px; border-bottom: 1px solid #f1f3f4; }
+    .s-head { display: flex; align-items: center; gap: 8px; }
+    .s-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+    .s-name { font-size: 13.5px; font-weight: 600; flex: 1; }
+    .s-del { border: 0; background: transparent; color: #b6bcc4; cursor: pointer; font-size: 14px; }
+    .s-del:hover { color: var(--red); }
+    .s-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .s-toggle {
+      border: 0; border-radius: 16px; padding: 7px 13px; font-size: 12px; font-weight: 600; cursor: pointer; color: #fff;
+    }
+    .s-toggle.clear { background: var(--red); }
+    .s-toggle.flooded { background: var(--green); }
+    .s-depth { flex: 1; }
+    .s-depthval { font-size: 12px; color: var(--grey); width: 52px; text-align: right; }
+    .s-meta { font-size: 11px; color: #9aa0a6; margin-top: 6px; }
+    footer { padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--grey); }
+    .keybar {
+      position: fixed; inset: 0; z-index: 50; background: rgba(32,33,36,.6);
+      display: grid; place-items: center;
+    }
+    .keybar .box { background: #fff; border-radius: 14px; padding: 24px; width: 320px; }
+    .keybar h2 { font-size: 16px; margin-bottom: 10px; }
+    .keybar input { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 14px; }
+    .keybar button { margin-top: 12px; width: 100%; border: 0; background: var(--blue); color: #fff; border-radius: 20px; padding: 10px; font-size: 14px; cursor: pointer; }
+    .toast {
+      position: fixed; bottom: 18px; right: 18px; z-index: 60;
+      background: var(--ink); color: #fff; border-radius: 10px; padding: 10px 16px; font-size: 13px;
+      opacity: 0; transition: opacity .3s;
+    }
+    .toast.show { opacity: 1; }
+    @media (max-width: 760px) {
+      #map { inset: 46vh 0 0 0; }
+      .side { width: 100%; height: 46vh; bottom: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <div class="side">
+    <header>
+      <h1>Mercuri<span class="l">L</span> mission control</h1>
+      <div class="hint">Click the map to add a sensor · drag to move · toggle to flood/clear. The public app reacts within 5 s.</div>
+    </header>
+    <div class="etl" id="etl">
+      <span id="etlStatus">…</span>
+      <button id="etlBtn">Refresh gov data</button>
+    </div>
+    <div class="list" id="list"></div>
+    <footer><a href="/?scenario=pitch" target="_blank">Open public app (pitch scenario) ↗</a></footer>
+  </div>
+  <div id="map"></div>
+  <div class="keybar hidden" id="keybar" style="display:none">
+    <div class="box">
+      <h2>Admin key</h2>
+      <input id="keyInput" type="password" placeholder="ADMIN_KEY">
+      <button id="keyGo">Enter</button>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script src="/vendor/maplibre-gl.js"></script>
+  <script src="/map-style.js"></script>
+  <script src="/admin.js"></script>
+</body>
+</html>

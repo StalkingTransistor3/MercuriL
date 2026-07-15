@@ -1,62 +1,57 @@
-# MercuriL — landing site
+# MercuriL — the map that sees the flood
 
-Landing site for **MercuriL** — a flood-crossing sensor network and verified-closure feed. Node/Express + static frontend + Neon Postgres intake form. Designed to deploy on Railway.
+Live prototype for the MercuriL flood road-safety network (UNSW Peter Farrell Cup 2026).
+
+A Google-Maps-style web app (desktop + mobile) with one switch:
+
+- **Today** — the map as it exists: real routing, real government closure data, and no idea the causeway ahead is under water.
+- **With MercuriL** — the same map with the sensor network: flooded crossings detected in minutes, verified closures on the map, and the route quietly re-planned around the water.
+
+## What's real vs simulated
+
+| Layer | Status |
+|---|---|
+| Government closures (grey dots) | **Real** — the federal [Roadworks and Road Closures](https://catalogue.data.infrastructure.gov.au/dataset/harmonised-national-roadworks-and-road-closures) dataset (Dept of Infrastructure, CC-BY 4.0), NSW slice (~103k records), synced daily into Postgres |
+| Road network + routing | **Real** — OSM road graph via FOSSGIS Valhalla (`exclude_polygons` for flood avoidance), OSRM fallback |
+| Search | **Real** — Photon geocoding, AU-biased |
+| Sensors (green/red dots) | **Simulated** — hardware in prototyping; states are driven live from `/admin` |
 
 ## Stack
 
-- Node 20+ / Express 4
-- Vanilla HTML + CSS + JS in `public/`
-- Neon Postgres (via `pg`) for intake storage; schema auto-created on boot
-- Helmet + `express-rate-limit` for basic hygiene
+Express + Neon Postgres · MapLibre GL + OpenFreeMap tiles (restyled toward the Google palette in `public/map-style.js`) · no build step, no frontend framework.
 
-## Local dev
+```
+lib/db.js       schema + pool + demo-sensor seed (closures/sensors/readings/inquiries/etl_runs)
+lib/etl.js      ArcGIS -> Postgres sync (boot-if-stale + daily)
+lib/routing.js  Valhalla/OSRM proxy, flood buffers, hazard detection
+server.js       API: /api/closures /api/sensors /api/route /api/geocode /api/etl/* /api/inquire
+public/         the app (index.html) + mission control (admin.html)
+```
+
+## Run
 
 ```bash
 npm install
-cp .env.example .env
-# fill in DATABASE_URL (Neon connection string)
-npm run dev
-# → http://localhost:3000
+cp .env.example .env   # fill DATABASE_URL (Neon pooled connection) + ADMIN_KEY
+node server.js         # first boot ingests ~103k NSW records (~40 s)
 ```
 
-## Database (Neon)
+- App: `http://localhost:3000` — pitch scenario: `http://localhost:3000/?scenario=pitch`
+- Mission control: `http://localhost:3000/admin` (asks for `ADMIN_KEY`; flood/clear sensors live — the public app reacts within 5 s)
 
-Intake submissions are stored in a single `inquiries` table in a Neon Postgres
-database. **No manual setup needed** — on startup the server runs a
-`CREATE TABLE IF NOT EXISTS`, so the table is created automatically the first
-time it boots with a valid `DATABASE_URL`.
+## Deploy (Railway)
 
-Schema:
-
-| Column | Type |
-| --- | --- |
-| `id` | `bigint` identity, primary key |
-| `inquiry_type` | `text` — one of: `Council pilot`, `Expert consultation`, `State agency / SES`, `Media`, `Other` |
-| `name` | `text` |
-| `email` | `text` |
-| `organisation` | `text` (nullable) |
-| `role` | `text` (nullable) |
-| `message` | `text` |
-| `source` | `text` |
-| `created_at` | `timestamptz` default `now()` |
-
-Get `DATABASE_URL` from the Neon dashboard → **Connection Details → Pooled connection**. Keep it secret; it only lives in `.env` (gitignored) and Railway Variables.
-
-## Deploy to Railway
-
-1. Push this repo to GitHub (already at `StalkingTransistor3/MercuriL`).
-2. In Railway → **New Project → Deploy from GitHub** → pick this repo.
-3. Under **Variables**, set:
-   - `DATABASE_URL` (the Neon pooled connection string)
-4. Railway auto-detects Node via nixpacks and runs `npm start` (see `railway.json`).
-5. Under **Settings → Networking**, generate a Railway domain (for smoke-testing) and add your custom domain when ready.
-6. Point DNS: `CNAME @ → <project>.up.railway.app` (or `A` record per Railway's instructions).
+1. Push to `main` — Railway auto-deploys (nixpacks, `npm start`).
+2. Variables: `DATABASE_URL` (Neon pooled connection string), `ADMIN_KEY`.
+3. `postinstall` vendors MapLibre into `public/vendor/`. Schema auto-creates on boot.
+4. Health probe: `GET /healthz`.
 
 ## Copy doctrine
 
 Site copy stays impersonal and factual. Katya's personal story lives in the
 stage pitch only — never on the website (decided 2026-07-06: putting it in
-marketing copy cheapens it). Keep her bio to credentials.
+marketing copy cheapens it). Keep her bio to credentials. The About panel's
+integrity note (real vs simulated) stays — judges will click this site.
 
 ## Compliance guardrails (Peter Farrell Cup rubric — David Burt)
 
@@ -67,8 +62,8 @@ Do not add to the site pre-finals:
 - ABN or company registration details
 - Press releases, "launch" language, funding announcements
 
-The current framing — "we're building this, incubated with UNSW, forming an expert bench" — is the ceiling. See `dashboards/data/reports/2026-06-29-pfc-evidence-ladder-v2.md` for the full rubric note.
+The current framing — "we're building this, prototype phase, talk to us" — is the ceiling. See `dashboards/data/reports/2026-06-29-pfc-evidence-ladder-v2.md` for the full rubric note.
 
-## Health check
+## Attribution
 
-`GET /healthz` returns `{ ok: true }` — use for Railway health probes if desired.
+Road-closure data © Commonwealth of Australia (DITRDCA), CC-BY 4.0 · Map data © OpenStreetMap contributors via OpenFreeMap · Routing by Valhalla (FOSSGIS) / OSRM demo — community services, be gentle.

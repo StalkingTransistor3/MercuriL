@@ -1,279 +1,112 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MercuriL — verified flood-crossing intelligence</title>
-    <meta
-      name="description"
-      content="MercuriL is a low-cost sensor network and verified-closure feed for Australia's flood-prone road crossings. Incubated with UNSW."
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700&family=Inter:wght@400;500&family=DM+Mono&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/styles.css" />
-    <meta property="og:title" content="MercuriL — verified flood-crossing intelligence" />
-    <meta
-      property="og:description"
-      content="A low-cost sensor network and verified-closure feed for Australia's flood-prone road crossings."
-    />
-    <meta property="og:type" content="website" />
-  </head>
-  <body>
-    <header class="site-header">
-      <div class="container header-inner">
-        <a href="/" class="brand">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span class="brand-name">MercuriL</span>
-        </a>
-        <nav class="site-nav">
-          <a href="#problem">Problem</a>
-          <a href="#solution">Solution</a>
-          <a href="#how">How it works</a>
-          <a href="#team">Team</a>
-          <a href="#contact" class="nav-cta">Talk to us</a>
-        </nav>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MercuriL — the map that sees the flood</title>
+  <meta name="description" content="Live prototype: real NSW road-closure data + the MercuriL flood-sensor network. Toggle to see what your map is missing.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%234285F4'/%3E%3Ccircle cx='12' cy='12' r='4.5' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Search / directions panel -->
+  <div class="panel" id="panel">
+    <div class="searchbox" id="searchbox">
+      <button class="iconbtn" id="menuBtn" title="About MercuriL" aria-label="About">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="#5f6368" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      </button>
+      <input id="searchInput" type="text" placeholder="Search here" autocomplete="off">
+      <button class="iconbtn" id="dirBtn" title="Directions" aria-label="Directions">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="#4285F4" d="M21.71 11.29l-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42l9 9a1 1 0 0 0 1.42 0l9-9a1 1 0 0 0 0-1.42zM14 14.5V12h-4v3H8v-4a1 1 0 0 1 1-1h5V7.5l3.5 3.5z"/></svg>
+      </button>
+    </div>
+
+    <div class="dirbox hidden" id="dirbox">
+      <div class="dirrow">
+        <span class="dot dot-a"></span>
+        <input id="fromInput" type="text" placeholder="Choose starting point" autocomplete="off">
       </div>
-    </header>
-
-    <main>
-      <section class="hero">
-        <canvas id="hero-gl" aria-hidden="true"></canvas>
-        <canvas id="hero-fx" aria-hidden="true"></canvas>
-        <div class="container hero-content">
-          <p class="eyebrow">// MercuriL · incubated with UNSW //</p>
-          <h1>
-            No one should drown<br />because the map was wrong.
-          </h1>
-          <p class="lede">
-            Sensors on the crossings nobody watches, feeding the maps everyone trusts.
-          </p>
-          <div class="hero-ctas">
-            <a href="#contact" class="btn btn-primary">Scope a pilot corridor</a>
-            <a href="#solution" class="hero-secondary">See how it works ↓</a>
-          </div>
-          <p class="authority-line">UNSW FOUNDERS · WRL TRAFFICABILITY THRESHOLDS · DISASTER READY FUND PATHWAY</p>
-        </div>
-        <div class="hero-status" aria-hidden="true">
-          <span class="status-line"><span class="status-dot"></span>PROTOTYPE PHASE</span>
-        </div>
-      </section>
-
-      <div class="stat-strip">
-        <div class="container stat-strip-inner">
-          <div class="strip-stat reveal">
-            <div class="force-label">// THE GAP //</div>
-            <div class="num">~<em data-count="100000" data-format="comma">0</em></div>
-            <div class="cap">unmonitored crossings, NSW alone</div>
-          </div>
-          <div class="strip-stat reveal">
-            <div class="force-label">// FUNDING FORCE //</div>
-            <div class="num">$<em data-count="200">0</em>M / yr</div>
-            <div class="cap">Disaster Ready Fund</div>
-          </div>
-          <div class="strip-stat reveal">
-            <div class="force-label">// CLIMATE FORCE //</div>
-            <div class="num">$38B → $<em data-count="94">0</em>B</div>
-            <div class="cap">annual disaster cost by 2060</div>
-          </div>
-          <div class="strip-stat reveal">
-            <div class="force-label">// PROCUREMENT WINDOW //</div>
-            <div class="num">&lt; $<em data-count="50">0</em>k</div>
-            <div class="cap">council RFQ threshold — no tender</div>
-          </div>
-        </div>
+      <div class="dirrow">
+        <span class="dot dot-b"></span>
+        <input id="toInput" type="text" placeholder="Choose destination" autocomplete="off">
       </div>
+      <button class="iconbtn swap" id="swapBtn" title="Swap" aria-label="Swap">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#5f6368" d="M7 3l-5 5 5 5V9h9V7H7V3zm10 8v4H8v2h9v4l5-5-5-5z"/></svg>
+      </button>
+      <button class="closedir" id="closeDir" aria-label="Close directions">✕</button>
+    </div>
 
-      <section id="problem" class="section section-alt">
-        <div class="container narrow reveal">
-          <p class="section-kicker">// Problem //</p>
-          <h2>The road is flooded. The map says drive.</h2>
-          <p>Closures don't reach the apps. Gauges fail. Reopening is guesswork.</p>
-        </div>
-      </section>
+    <div class="suggest hidden" id="suggest"></div>
 
-      <section id="solution" class="section">
-        <div class="container">
-          <div class="reveal">
-            <p class="section-kicker">// Solution //</p>
-            <h2>Verified ground truth, delivered.</h2>
-          </div>
+    <!-- Route summary card -->
+    <div class="routecard hidden" id="routecard">
+      <div class="rc-time" id="rcTime">–</div>
+      <div class="rc-sub" id="rcSub">–</div>
+      <div class="rc-note" id="rcNote"></div>
+    </div>
+  </div>
 
-          <div class="two-col">
-            <article class="card reveal">
-              <h3>The detection module</h3>
-              <ul class="feature-list">
-                <li>Depth + velocity vs <a href="https://www.wrl.unsw.edu.au/" target="_blank" rel="noopener">UNSW WRL</a> thresholds</li>
-                <li><strong>AUD $50 – $150</strong> target unit cost</li>
-                <li>NB-IoT + satellite — no coverage needed</li>
-                <li>IP67 · years unattended</li>
-              </ul>
-            </article>
+  <!-- Today / MercuriL toggle -->
+  <div class="modetoggle" id="modetoggle">
+    <button id="btnToday" class="on">Today</button>
+    <button id="btnMerc"><span class="mdot"></span>With MercuriL</button>
+  </div>
 
-            <article class="card reveal">
-              <h3>The verified-closure feed</h3>
-              <ul class="feature-list">
-                <li>Official closures + ground truth, one feed</li>
-                <li>API for navigation platforms</li>
-                <li>Ground-truth <strong>reopening</strong> signal</li>
-              </ul>
-            </article>
-          </div>
+  <!-- Alert cards -->
+  <div class="alert alert-danger" id="alertDanger">
+    <div class="al-title" id="adTitle">⚠ Flooded crossing ahead</div>
+    <div class="al-body" id="adBody"></div>
+    <div class="al-sub" id="adSub"></div>
+  </div>
+  <div class="alert alert-ghost" id="alertGhost">
+    <div class="al-title" id="agTitle">This is the route your map gives you today.</div>
+    <div class="al-body" id="agBody"></div>
+  </div>
 
-          <div class="architecture-diagram reveal" aria-label="System architecture diagram">
-            <div class="diagram-row">
-              <div class="diagram-node">Detection modules<br /><small>flood-prone crossings</small></div>
-              <div class="diagram-node">BOM · DoT · SES<br /><small>official feeds</small></div>
-            </div>
-            <div class="diagram-arrow">↓</div>
-            <div class="diagram-node diagram-node--wide">
-              MercuriL verified-closure aggregator
-            </div>
-            <div class="diagram-arrow">↓</div>
-            <div class="diagram-row">
-              <div class="diagram-node">Navigation platforms</div>
-              <div class="diagram-node">Council + SES ops</div>
-              <div class="diagram-node">Insurance + logistics</div>
-            </div>
-          </div>
-        </div>
-      </section>
+  <!-- About slide-over -->
+  <div class="about hidden" id="about">
+    <button class="about-close" id="aboutClose" aria-label="Close">✕</button>
+    <h1><span class="logo-m">Mercuri</span><span class="logo-l">L</span></h1>
+    <p class="tagline">The map that sees the flood.</p>
 
-      <section id="how" class="section section-alt">
-        <div class="container">
-          <div class="reveal">
-            <p class="section-kicker">// How it works //</p>
-          </div>
-          <div class="steps-grid">
-            <article class="step reveal">
-              <span class="step-num">01 — WE MAP</span>
-              <h3>Find the gaps</h3>
-            </article>
-            <article class="step reveal">
-              <span class="step-num">02 — WE SENSE</span>
-              <h3>Deploy the modules</h3>
-            </article>
-            <article class="step reveal">
-              <span class="step-num">03 — WE VERIFY</span>
-              <h3>One trusted feed</h3>
-            </article>
-            <article class="step step--decide reveal">
-              <span class="step-num">04 — YOU DECIDE</span>
-              <h3>Authority stays with you</h3>
-            </article>
-          </div>
-        </div>
-      </section>
+    <p>On New Year's Eve 2025, a father and daughter followed their navigation app onto a flooded road near Darwin. They escaped through the car window and walked 13&nbsp;km to safety. The map never knew the road was gone.</p>
+    <p><b>87% of fatal vehicle flood incidents happen at crossings</b> — causeways, bridges, dips. Nobody is standing there at 2am to report them.</p>
+    <p>MercuriL is a network of low-cost satellite-IoT depth sensors at exactly those crossings, feeding <b>verified, real-time closures</b> into the maps people already trust.</p>
 
-      <section id="team" class="section">
-        <div class="container narrow">
-          <div class="reveal">
-            <p class="section-kicker">// Team //</p>
-          </div>
-          <div class="team-grid">
-            <article class="team-card reveal">
-              <h3>Katya <span class="team-role">Founder · Hardware &amp; mission</span></h3>
-              <p>Robotics engineer with emergency management experience.</p>
-            </article>
-            <article class="team-card reveal">
-              <h3>Andrew Suryanto <span class="team-role">Founding operator · GTM &amp; partnerships</span></h3>
-              <p>Council outreach, grants, pilot corridor.</p>
-            </article>
-            <article class="team-card team-card--open reveal">
-              <h3>Advisors &amp; expert bench <span class="team-role">Open</span></h3>
-              <p>Flood engineering · council infrastructure · manufacturing. <a href="#contact">Get in touch</a>.</p>
-            </article>
-          </div>
-        </div>
-      </section>
+    <h2>What's real in this prototype</h2>
+    <ul>
+      <li><b>Real:</b> every grey dot — NSW closures/hazards from the federal Roadworks &amp; Road Closures dataset (refreshed daily), and routing on the real road network.</li>
+      <li><b>Simulated:</b> the sensors. The hardware is in prototyping — this shows the network exactly as it would behave.</li>
+    </ul>
 
-      <section id="contact" class="section section-contact">
-        <div class="container narrow">
-          <div class="reveal">
-            <p class="section-kicker">// Contact //</p>
-            <h2>We're selecting 1–3 pilot councils.</h2>
-            <p class="section-lede">
-              Talk to us, get a <strong>ranked crossing-risk map of your LGA</strong>. Free.
-            </p>
-          </div>
+    <h2>Talk to us</h2>
+    <form id="inqForm">
+      <select id="inqType" required>
+        <option value="" disabled selected>I'm interested as…</option>
+        <option>Council pilot</option>
+        <option>Expert consultation</option>
+        <option>State agency / SES</option>
+        <option>Media</option>
+        <option>Other</option>
+      </select>
+      <input id="inqName" type="text" placeholder="Name" required>
+      <input id="inqEmail" type="email" placeholder="Email" required>
+      <input id="inqOrg" type="text" placeholder="Organisation (optional)">
+      <textarea id="inqMsg" rows="3" placeholder="Message" required></textarea>
+      <input id="inqWebsite" type="text" class="hp" tabindex="-1" autocomplete="off">
+      <button type="submit" id="inqSubmit">Send</button>
+      <div id="inqStatus"></div>
+    </form>
 
-          <form id="inquire-form" class="inquire-form reveal" novalidate>
-            <div class="field field-hp" aria-hidden="true">
-              <label for="website">Leave this field empty</label>
-              <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
-            </div>
+    <p class="attrib">Road closure data © Commonwealth of Australia (DITRDCA), CC-BY 4.0 · Map © OpenStreetMap contributors, OpenFreeMap · Routing: Valhalla/FOSSGIS</p>
+  </div>
+  <div class="scrim hidden" id="scrim"></div>
 
-            <div class="field">
-              <label for="inquiryType">Regarding</label>
-              <select id="inquiryType" name="inquiryType" required>
-                <option value="">Choose one…</option>
-                <option>Council pilot</option>
-                <option>Expert consultation</option>
-                <option>State agency / SES</option>
-                <option>Media</option>
-                <option>Other</option>
-              </select>
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label for="name">Your name</label>
-                <input type="text" id="name" name="name" required autocomplete="name" />
-              </div>
-              <div class="field">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" required autocomplete="email" />
-              </div>
-            </div>
-
-            <div class="field">
-              <label for="organisation">Organisation</label>
-              <input type="text" id="organisation" name="organisation" autocomplete="organization" />
-            </div>
-
-            <div class="field">
-              <label for="message">Message</label>
-              <textarea id="message" name="message" rows="5" required minlength="10"></textarea>
-            </div>
-
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" id="submit-btn">Send</button>
-              <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
-            </div>
-          </form>
-        </div>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <div class="container">
-        <div class="footer-inner">
-          <div>
-            <div class="brand">
-              <span class="brand-mark" aria-hidden="true"></span>
-              <span class="brand-name">MercuriL</span>
-            </div>
-            <p class="footer-note">In development with UNSW.</p>
-          </div>
-          <div class="footer-meta">
-            <p><span class="status-line"><span class="status-dot" aria-hidden="true"></span>PROTOTYPE PHASE</span></p>
-            <p>33.9173°S, 151.2313°E</p>
-            <p>SYDNEY NSW</p>
-            <p>© 2026 MercuriL</p>
-          </div>
-        </div>
-        <div class="footer-disclaimer">
-          MercuriL provides monitoring and alerting data. Authorities keep full decision
-          authority.
-        </div>
-      </div>
-    </footer>
-
-    <script src="/script.js" defer></script>
-    <script src="/terrain.js" defer></script>
-    <script src="/fx.js" defer></script>
-  </body>
+  <script src="/vendor/maplibre-gl.js"></script>
+  <script src="/map-style.js"></script>
+  <script src="/app.js"></script>
+</body>
 </html>
