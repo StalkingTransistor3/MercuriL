@@ -88,7 +88,16 @@ app.get('/api/closures', async (req, res) => {
     const params = [w, e, s, n];
     let where = 'lon BETWEEN $1 AND $2 AND lat BETWEEN $3 AND $4';
     if (active) {
-      where += ` AND (to_date IS NULL OR to_date > now()) AND category IN ('Road Closure','Hazard','Road Conditions')`;
+      // Flood-relevant only: full closures, plus hazards/conditions that are
+      // actually about water. Generic "merge left" roadworks noise stays out —
+      // every grey dot should be on-message for the demo.
+      where += ` AND (to_date IS NULL OR to_date > now())
+        AND (
+          category = 'Road Closure'
+          OR (category IN ('Hazard','Road Conditions')
+              AND (description ~* 'flood|water (over|across|on)|inundat|wash(ed)? ?(out|away)|causeway'
+                   OR type ~* 'flood|weather'))
+        )`;
     }
     const { rows } = await getPool().query(
       `SELECT uid, category, type, status, description, street_name, direction,
