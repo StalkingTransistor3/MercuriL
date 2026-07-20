@@ -26,6 +26,10 @@ app.set('trust proxy', 1);
 
 app.use(
   helmet({
+    // Drop X-Frame-Options entirely so the demo can be iframed anywhere
+    // (Notion, Framer, judge links, buildclub.ai). Framing is governed by
+    // the CSP frame-ancestors directive below instead.
+    frameguard: false,
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
@@ -42,6 +46,8 @@ app.use(
         // maplibre-gl runs its worker from a blob
         'worker-src': ["'self'", 'blob:'],
         'child-src': ["'self'", 'blob:'],
+        // Allow embedding on any parent page (overrides useDefaults' 'self').
+        'frame-ancestors': ['*'],
       },
     },
   })
