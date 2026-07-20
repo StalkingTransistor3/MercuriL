@@ -270,14 +270,6 @@
     }
   }
 
-  function minsAgo(ts) {
-    const m = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
-    if (m < 1) return 'just now';
-    if (m === 1) return '1 min ago';
-    if (m < 120) return `${m} min ago`;
-    return `${Math.round(m / 60)} hr ago`;
-  }
-
   function renderAlerts(r) {
     const danger = $('alertDanger');
     const ghost = $('alertGhost');
@@ -287,7 +279,7 @@
     if (state.mode === 'mercuril' && r.avoided?.length) {
       const s = r.avoided[0];
       $('adTitle').textContent = '⚠ Flooded crossing ahead — rerouted';
-      $('adBody').innerHTML = `<b>${s.name}</b> is under <b>${Number(s.depth_m).toFixed(2)} m</b> of water. MercuriL detected it ${minsAgo(s.last_seen)} and closed the road in your app.`;
+      $('adBody').innerHTML = `<b>${s.name}</b> is under <b>${Number(s.depth_m).toFixed(2)} m</b> of water. MercuriL detected it and closed the road in your app.`;
       $('adSub').textContent = `New route adds ${Math.round(r.extraMin)} min. No one has to guess.`;
       danger.classList.add('show');
     } else if (state.mode === 'mercuril' && r.avoidanceUnavailable) {
@@ -323,7 +315,7 @@
       .setHTML(
         `<div class="pp-name">${p.name}</div>
          <div class="pp-state ${p.state}">${flooded ? `WATER OVER ROAD — ${Number(p.depth_m).toFixed(2)} m` : 'Road clear'}</div>
-         <div class="pp-meta">Last reading ${minsAgo(p.last_seen)} · battery ${p.battery_pct}%</div>
+         <div class="pp-meta">Live reading · battery ${p.battery_pct}%</div>
          ${sparkline(readings)}`
       )
       .addTo(map);
@@ -413,16 +405,6 @@
     $('searchbox').classList.add('hidden');
     if (state.to) $('toInput').value = state.to.label;
     $('fromInput').focus();
-  };
-  $('closeDir').onclick = () => {
-    $('dirbox').classList.add('hidden');
-    $('searchbox').classList.remove('hidden');
-    $('routecard').classList.add('hidden');
-    map.getSource('route')?.setData(EMPTY);
-    map.getSource('baseline')?.setData(EMPTY);
-    renderAlerts(null);
-    state.from = state.to = state.route = null;
-    setMarkers();
   };
   $('swapBtn').onclick = () => {
     [state.from, state.to] = [state.to, state.from];
