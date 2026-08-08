@@ -14,7 +14,8 @@ A Google-Maps-style web app (desktop + mobile) with one switch:
 | Government closures (grey dots) | **Real** — the federal [Roadworks and Road Closures](https://catalogue.data.infrastructure.gov.au/dataset/harmonised-national-roadworks-and-road-closures) dataset (Dept of Infrastructure, CC-BY 4.0), NSW slice (~103k records), synced daily into Postgres |
 | Road network + routing | **Real** — OSM road graph via FOSSGIS Valhalla (`exclude_polygons` for flood avoidance), OSRM fallback |
 | Search | **Real** — Photon geocoding, AU-biased |
-| Sensors (green/red dots) | **Simulated** — hardware in prototyping; states are driven live from `/admin` |
+| Sensors (green/red dots) | **Simulated** — hardware in prototyping; states are driven live from `/admin`, or from a real unit via `/api/ingest` (see `hardware/INGEST.md`) |
+| Closure provenance (dot shading, feed counter, About panel figures) | **Real** — computed live from date fields in the same government records |
 
 ## Stack
 
@@ -24,9 +25,35 @@ Express + Neon Postgres · MapLibre GL + OpenFreeMap tiles (restyled toward the 
 lib/db.js       schema + pool + demo-sensor seed (closures/sensors/readings/inquiries/etl_runs)
 lib/etl.js      ArcGIS -> Postgres sync (boot-if-stale + daily)
 lib/routing.js  Valhalla/OSRM proxy, flood buffers, hazard detection
-server.js       API: /api/closures /api/sensors /api/route /api/geocode /api/etl/* /api/inquire
+server.js       API: /api/closures /api/closures/stats /api/sensors /api/devices
+                     /api/ingest /api/route /api/geocode /api/etl/* /api/inquire
 public/         the app (index.html) + mission control (admin.html)
+hardware/       sensor design brief + the device wire contract (INGEST.md)
 ```
+
+## Hardware ingest
+
+Real units post to `POST /api/ingest` with a per-device token — see
+[`hardware/INGEST.md`](hardware/INGEST.md) for the contract, and
+`node hardware/fake-device.js` to drive a full flood cycle without hardware.
+
+Two rules the server enforces, both deliberate: an `unknown` reading never
+clears a flooded crossing (fails toward closed, never toward safe), and a
+partial payload never erases the last known reading.
+
+## The closure-provenance layer
+
+`/api/closures` tags every government record `dated` / `open_ended` /
+`abandoned`, derived **from date fields only**, and `/api/closures/stats`
+returns the statewide counts shown in the About panel and the map counter.
+
+Do not add a bucket based on the source's `status` column. Its two values
+('Open'/'Closed') do not describe whether the road is trafficable — the set
+contains 'Closed' records that are single-lane crash reports and 'Open' records
+that are scheduled roadworks ending in 2029. It appears to track the source
+system's own record lifecycle, it is undocumented in the payload, and a claim
+built on it would not survive one informed question. Dates are unambiguous;
+build the argument on those.
 
 ## Run
 

@@ -68,17 +68,25 @@
       layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 10, 'text-font': ['Noto Sans Regular'] },
       paint: { 'text-color': '#41454b' },
     });
+    // Colour carries the data-quality verdict, not the closure type. Amber =
+    // the record contradicts itself; pale = open-ended, never closed out;
+    // solid = has a real end date. Clicking any dot explains which and why.
     map.addLayer({
       id: 'closures-pt',
       type: 'circle',
       source: 'closures',
       filter: ['!', ['has', 'point_count']],
       paint: {
-        'circle-color': '#9aa0a6',
-        'circle-radius': 4,
+        'circle-color': [
+          'match', ['get', 'provenance'],
+          'dated', '#5f6368',
+          'abandoned', '#d7dade',
+          /* open_ended */ '#b6bcc4',
+        ],
+        'circle-radius': ['match', ['get', 'provenance'], 'dated', 5.5, 4],
         'circle-stroke-width': 1.5,
         'circle-stroke-color': '#ffffff',
-        'circle-opacity': 0.85,
+        'circle-opacity': ['match', ['get', 'provenance'], 'abandoned', 0.65, 0.95],
       },
     });
 
@@ -172,6 +180,28 @@
         state.sensorsFp = fp;
         if (state.from && state.to) fetchRoute(); // live re-route when a sensor floods
       }
+    } catch (_) {}
+  }
+
+  // ---------- official-feed integrity numbers ----------
+  // Statewide, straight out of the government's own records. Rendered live so
+  // the claim on stage and the claim on the site can never disagree.
+  async function loadFeedStats() {
+    try {
+      const s = await (await fetch('/api/closures/stats')).json();
+      if (typeof s?.listed !== 'number') return;
+      $('fsListed').textContent = s.listed.toLocaleString();
+      $('fsVerified').textContent = s.dated.toLocaleString();
+      $('feedstat').classList.remove('hidden');
+
+      $('abListed').textContent = s.listed.toLocaleString();
+      $('abDated').textContent = s.dated.toLocaleString();
+      $('abOpenEnded').textContent = s.open_ended.toLocaleString();
+      $('abAbandoned').textContent = s.abandoned.toLocaleString();
+      $('abRecent').textContent = s.started_last_7d.toLocaleString();
+      if (s.oldest_start) $('abOldest').textContent = fmtDate(s.oldest_start);
+      if (s.furthest_end) $('abFurthest').textContent = fmtDate(s.furthest_end);
+      if (s.last_sync) $('abSync').textContent = new Date(s.last_sync).toLocaleString('en-AU');
     } catch (_) {}
   }
 
@@ -321,14 +351,41 @@
       .addTo(map);
   }
 
+  const DAY_MS = 86400000;
+  const fmtDate = (v) =>
+    new Date(v).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  // The record's own paperwork, read back to whoever clicks it. Every line is
+  // the government's data or a date subtraction — no interpretation, nothing
+  // that needs defending in a Q&A.
+  function provenanceNote(p) {
+    const started = p.from ? new Date(p.from) : null;
+    const days = started ? Math.floor((Date.now() - started.getTime()) / DAY_MS) : null;
+    const reported = started
+      ? `First reported ${fmtDate(p.from)}${days > 0 ? ` · ${days.toLocaleString()} days ago` : ''}`
+      : 'No start date recorded';
+
+    if (p.provenance === 'abandoned') {
+      return `<div class="cl-flag warn">⚠ No end date, and over a year old. Still listed as in force.</div>
+              <div class="cl-age">${reported}</div>`;
+    }
+    if (p.provenance === 'open_ended') {
+      return `<div class="cl-flag warn">⚠ No end date recorded.</div>
+              <div class="cl-age">${reported}</div>`;
+    }
+    return `<div class="cl-flag ok">✓ Has an end date — ${fmtDate(p.to)}</div>
+            <div class="cl-age">${reported}</div>`;
+  }
+
   function onClosureClick(e) {
     const p = e.features[0].properties;
-    new maplibregl.Popup({ offset: 10 })
+    new maplibregl.Popup({ offset: 10, maxWidth: '290px' })
       .setLngLat(e.features[0].geometry.coordinates)
       .setHTML(
         `<div class="cl-cat">${p.category || 'Closure'} · official feed</div>
          <div class="cl-desc">${p.description || p.type || ''}</div>
-         <div class="cl-street">${p.street || ''}</div>`
+         <div class="cl-street">${p.street || ''}</div>
+         ${provenanceNote(p)}`
       )
       .addTo(map);
   }
@@ -415,7 +472,9 @@
   };
 
   // ---------- about ----------
-  $('menuBtn').onclick = () => { $('about').classList.remove('hidden'); $('scrim').classList.remove('hidden'); };
+  const openAbout = () => { $('about').classList.remove('hidden'); $('scrim').classList.remove('hidden'); };
+  $('menuBtn').onclick = openAbout;
+  $('feedstat').onclick = openAbout; // the counter is the door to the full breakdown
   $('aboutClose').onclick = $('scrim').onclick = () => {
     $('about').classList.add('hidden');
     $('scrim').classList.add('hidden');
@@ -461,14 +520,23 @@
     fetchRoute();
   }
 
-  // On phones, dock the mode toggle into the panel under the search box.
+  // On phones, dock the mode toggle and the feed counter into the panel under
+  // the search box. Order matters — toggle first, counter beneath it.
   function dockToggle() {
-    const toggle = $('modetoggle');
-    if (matchMedia('(max-width: 640px)').matches) $('panel').appendChild(toggle);
-    else document.body.appendChild(toggle);
+    const phone = matchMedia('(max-width: 640px)').matches;
+    for (const id of ['modetoggle', 'feedstat']) {
+      const el = $(id);
+      if (phone) $('panel').appendChild(el);
+      else document.body.appendChild(el);
+    }
   }
   dockToggle();
   addEventListener('resize', dockToggle);
 
+  // Deliberately not inside the map's load handler: the feed evidence is the
+  // argument, and it has to survive a judge on a laptop where WebGL doesn't.
+  loadFeedStats();
+  // ?about=1 opens straight to the feed numbers — a link you can hand someone.
+  if (new URLSearchParams(location.search).get('about') === '1') openAbout();
   initMap();
 })();

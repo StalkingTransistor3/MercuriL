@@ -54,6 +54,14 @@
     <button id="btnMerc"><span class="mdot"></span>With MercuriL</button>
   </div>
 
+  <!-- Official-feed integrity counter (live, from the government's own data) -->
+  <button class="feedstat hidden" id="feedstat" title="What the official feed actually says">
+    <span class="fs-label">NSW official feed</span>
+    <span class="fs-num" id="fsListed">–</span><span class="fs-unit">closures listed</span>
+    <span class="fs-sep"></span>
+    <span class="fs-num strong" id="fsVerified">–</span><span class="fs-unit">with an end date</span>
+  </button>
+
   <!-- Alert cards -->
   <div class="alert alert-danger" id="alertDanger">
     <div class="al-title" id="adTitle">⚠ Flooded crossing ahead</div>
@@ -74,6 +82,31 @@
     <p>Navigation apps route drivers onto flooded roads because no data source tells them the road is gone. Australia's national closure feed is a daily harmonisation of state open data — built for planned roadworks, not for the crossing that went under an hour ago.</p>
     <p><b>87% of fatal vehicle flood incidents happen at crossings</b> — causeways, bridges, dips. Nobody is standing there at 2am to report them.</p>
     <p>MercuriL is a network of low-cost satellite-IoT depth sensors at exactly those crossings, feeding <b>verified, real-time closures</b> into the maps people already trust.</p>
+
+    <h2>What the official feed can and can't tell you</h2>
+    <p>Australia has a national road-closure dataset, harmonised from state open data.
+      These are its own numbers for flood-relevant NSW records that present as currently
+      in force — computed live, from dates in the source, at every page load.</p>
+    <table class="evidence">
+      <tr><td class="ev-n" id="abListed">–</td><td>flood-relevant records presenting as in force</td></tr>
+      <tr><td class="ev-n ok" id="abDated">–</td><td>of those carry an <b>end date</b> — a closure you could plan a drive around</td></tr>
+      <tr><td class="ev-n warn" id="abOpenEnded">–</td><td>have <b>no end date</b>, reported within the last year</td></tr>
+      <tr><td class="ev-n warn" id="abAbandoned">–</td><td>have <b>no end date and are over a year old</b>, still listed as in force today</td></tr>
+      <tr><td class="ev-n" id="abRecent">–</td><td>were first reported in the last seven days</td></tr>
+    </table>
+    <p class="ev-foot">Oldest record still presenting as in force: <b id="abOldest">–</b>.
+      Furthest end date in the set: <b id="abFurthest">–</b>.
+      Last synced from the federal feed: <b id="abSync">–</b>.</p>
+    <p>This is not negligence, and the councils and agencies filing these records are
+      not the problem. It is what happens when the only record of a flooded crossing is
+      a form somebody fills in during an emergency, at night, in the rain — and there is
+      no instrument anywhere that closes it out when the water goes down.</p>
+    <p>So the dataset does the honest thing and leaves the record open. Which means it
+      can tell you a crossing <i>went</i> under. It cannot tell you whether it is under
+      <b>right now</b>. Nothing in it is measuring the water. That is the gap.</p>
+    <p class="ev-foot">Every figure above is derived from date fields in the federal
+      Roadworks &amp; Road Closures dataset (CC-BY 4.0) and can be reproduced from the
+      source. Click any grey dot to see that record's own paperwork.</p>
 
     <h2>What's real in this prototype</h2>
     <ul>

@@ -5,3 +5,7 @@ node_modules/
 .DS_Store
 .railway/
 public/vendor/
+
+# This repo is PUBLIC. The design brief carries pre-finals pitch strategy,
+# costed BOM, competitor analysis and the internal schedule — it stays local.
+hardware/SENSOR-DESIGN.md
