@@ -36,7 +36,9 @@ app.use(
       directives: {
         'default-src': ["'self'"],
         'script-src': ["'self'", 'https://static.cloudflareinsights.com'],
-        'style-src': ["'self'", "'unsafe-inline'"],
+        // Inter + Instrument Serif, the two faces the mercuril.com landing uses.
+        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
         // map tiles/glyphs/sprites + inline data-uri markers
         'img-src': ["'self'", 'data:', 'blob:', 'https://tiles.openfreemap.org'],
         'connect-src': [

@@ -5,53 +5,64 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MercuriL — mission control</title>
   <meta name="robots" content="noindex">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23ea4335'/%3E%3Ccircle cx='12' cy='12' r='4.5' fill='%23fff'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#283648">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23283648'/%3E%3Ccircle cx='12' cy='12' r='6.5' fill='none' stroke='%23D74242' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23F3EFE8'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="/vendor/maplibre-gl.css">
+  <!-- Mission control shares the public app's tokens (see ui.css :root) rather
+       than importing it — ui.css is laid out for a full-bleed map, not a rail. -->
+  <link rel="stylesheet" href="/ui.css">
   <style>
-    :root { --blue:#4285f4; --red:#ea4335; --green:#34a853; --ink:#202124; --grey:#5f6368; --line:#dadce0; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; font-family: Roboto, -apple-system, "Segoe UI", Arial, sans-serif; }
-    #map { position: fixed; inset: 0 0 0 340px; background: #f2f1ec; }
+    html, body { height: 100%; font-family: var(--font); color: var(--fg); background: var(--bg); }
+    #map { position: fixed; inset: 0 0 0 340px; background: var(--ground); }
     .side {
       position: fixed; top: 0; left: 0; bottom: 0; width: 340px;
-      background: #fff; border-right: 1px solid var(--line);
+      background: var(--surface); border-right: 1px solid var(--line);
       display: flex; flex-direction: column; z-index: 10;
     }
-    .side header { padding: 16px 16px 10px; border-bottom: 1px solid var(--line); }
-    .side h1 { font-size: 17px; }
-    .side h1 .l { color: var(--red); }
-    .side .hint { font-size: 12px; color: var(--grey); margin-top: 4px; }
-    .etl { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--grey); display:flex; align-items:center; gap:10px; }
-    .etl button { border: 1px solid var(--line); background: #fff; border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-    .etl button:hover { background: #f1f3f4; }
-    .list { flex: 1; overflow-y: auto; }
-    .sensor { padding: 12px 16px; border-bottom: 1px solid #f1f3f4; }
+    .side header { padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
+    .side h1 { font-family: var(--display); font-size: 22px; font-weight: 400; }
+    .side h1 .l { color: var(--danger); }
+    .side .hint { font-size: 12px; color: var(--fg-3); margin-top: 6px; line-height: 1.5; }
+    .etl { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--fg-3); display:flex; align-items:center; gap:10px; }
+    .etl button { border: 1px solid var(--line); background: transparent; color: var(--fg-2); border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+    .etl button:hover { background: var(--hover-strong); color: var(--fg); }
+    .list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+    .sensor { padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
     .s-head { display: flex; align-items: center; gap: 8px; }
     .s-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
     .s-name { font-size: 13.5px; font-weight: 600; flex: 1; }
-    .s-del { border: 0; background: transparent; color: #b6bcc4; cursor: pointer; font-size: 14px; }
-    .s-del:hover { color: var(--red); }
+    .s-del { border: 0; background: transparent; color: var(--fg-4); cursor: pointer; font-size: 14px; }
+    .s-del:hover { color: var(--danger); }
     .s-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    /* The button carries the ACTION, not the state — on a clear sensor it
+       floods, so it is red. Inversion is deliberate; don't "fix" it. */
     .s-toggle {
-      border: 0; border-radius: 16px; padding: 7px 13px; font-size: 12px; font-weight: 600; cursor: pointer; color: #fff;
+      border: 0; border-radius: 16px; padding: 7px 13px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--bg);
     }
-    .s-toggle.clear { background: var(--red); }
-    .s-toggle.flooded { background: var(--green); }
-    .s-depth { flex: 1; }
-    .s-depthval { font-size: 12px; color: var(--grey); width: 52px; text-align: right; }
-    .s-meta { font-size: 11px; color: #9aa0a6; margin-top: 6px; }
-    footer { padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--grey); }
+    .s-toggle.clear { background: var(--danger); color: #fff; }
+    .s-toggle.flooded { background: var(--jade); }
+    .s-depth { flex: 1; accent-color: var(--brass); }
+    .s-depthval { font-family: var(--mono); font-size: 12px; color: var(--fg-3); width: 52px; text-align: right; }
+    .s-meta { font-family: var(--mono); font-size: 11px; color: var(--fg-4); margin-top: 6px; }
+    footer { padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-3); }
+    footer a { color: var(--brass); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
     .keybar {
-      position: fixed; inset: 0; z-index: 50; background: rgba(32,33,36,.6);
+      position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.6);
       display: grid; place-items: center;
     }
-    .keybar .box { background: #fff; border-radius: 14px; padding: 24px; width: 320px; }
-    .keybar h2 { font-size: 16px; margin-bottom: 10px; }
-    .keybar input { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 14px; }
-    .keybar button { margin-top: 12px; width: 100%; border: 0; background: var(--blue); color: #fff; border-radius: 20px; padding: 10px; font-size: 14px; cursor: pointer; }
+    .keybar .box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; width: 320px; box-shadow: var(--shadow-lg); }
+    .keybar h2 { font-family: var(--display); font-size: 20px; font-weight: 400; margin-bottom: 12px; }
+    .keybar input { width: 100%; border: 1px solid var(--line); background: hsl(215 28% 20%); color: var(--fg); border-radius: var(--radius); padding: 10px; font-size: 14px; outline: 0; }
+    .keybar input:focus { border-color: var(--brass); }
+    .keybar button { margin-top: 12px; width: 100%; border: 0; background: var(--fg); color: var(--bg); border-radius: var(--radius); padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
     .toast {
       position: fixed; bottom: 18px; right: 18px; z-index: 60;
-      background: var(--ink); color: #fff; border-radius: 10px; padding: 10px 16px; font-size: 13px;
+      background: var(--surface-3); color: var(--fg); border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px 16px; font-size: 13px;
       opacity: 0; transition: opacity .3s;
     }
     .toast.show { opacity: 1; }

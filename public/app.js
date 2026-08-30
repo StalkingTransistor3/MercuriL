@@ -19,6 +19,17 @@
     to: { lon: 153.43, lat: -29.112, label: 'Evans Head NSW' },
   };
 
+  // Dungog Shire proposed pilot network. Bounds are deliberately the sensor
+  // extent plus a small margin, not the LGA boundary — the argument the frame
+  // has to make is six points across three catchments against one gauge north
+  // of town, and a whole-shire frame shrinks the pins to nothing.
+  const DUNGOG = {
+    bounds: [
+      [151.49, -32.57], // SW
+      [151.82, -32.34], // NE
+    ],
+  };
+
   // ---------- map ----------
   let map;
   const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -46,8 +57,23 @@
     map.on('load', addLayers);
   }
 
+  // mercuril.com palette. Kept in sync with :root in ui.css — these are the
+  // map-drawn equivalents of the same tokens (MapLibre's colour parser predates
+  // the space-separated hsl() syntax the stylesheet uses, so hex here).
+  const C = {
+    ground: '#212c3b',
+    cream: '#f3efe8',
+    creamDim: '#a9a396',
+    brass: '#e0b45c',
+    brassDim: '#a3813a',
+    jade: '#5dac8f',
+    danger: '#d74242',
+    slate: '#7d8899',
+    slateDim: '#5b6675',
+  };
+
   function addLayers() {
-    // --- government closures (real data), clustered grey dots ---
+    // --- government closures (real data), clustered slate dots ---
     map.addSource('closures', { type: 'geojson', data: EMPTY, cluster: true, clusterRadius: 40, clusterMaxZoom: 10 });
     map.addLayer({
       id: 'closures-cluster',
@@ -55,8 +81,8 @@
       source: 'closures',
       filter: ['has', 'point_count'],
       paint: {
-        'circle-color': '#b6bcc4',
-        'circle-opacity': 0.75,
+        'circle-color': C.slateDim,
+        'circle-opacity': 0.85,
         'circle-radius': ['step', ['get', 'point_count'], 10, 25, 14, 100, 18],
       },
     });
@@ -66,7 +92,7 @@
       source: 'closures',
       filter: ['has', 'point_count'],
       layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 10, 'text-font': ['Noto Sans Regular'] },
-      paint: { 'text-color': '#41454b' },
+      paint: { 'text-color': C.cream },
     });
     // Colour carries the data-quality verdict, not the closure type. Amber =
     // the record contradicts itself; pale = open-ended, never closed out;
@@ -77,16 +103,19 @@
       source: 'closures',
       filter: ['!', ['has', 'point_count']],
       paint: {
+        // On the slate basemap the legibility ramp inverts: the trustworthy
+        // record (has an end date) is now the brightest, and the abandoned one
+        // recedes into the ground. Same verdict, same ordering, dark-side.
         'circle-color': [
           'match', ['get', 'provenance'],
-          'dated', '#5f6368',
-          'abandoned', '#d7dade',
-          /* open_ended */ '#b6bcc4',
+          'dated', C.slate,
+          'abandoned', '#46515f',
+          /* open_ended */ '#67717f',
         ],
         'circle-radius': ['match', ['get', 'provenance'], 'dated', 5.5, 4],
         'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#ffffff',
-        'circle-opacity': ['match', ['get', 'provenance'], 'abandoned', 0.65, 0.95],
+        'circle-stroke-color': C.ground,
+        'circle-opacity': ['match', ['get', 'provenance'], 'abandoned', 0.7, 0.95],
       },
     });
 
@@ -97,7 +126,7 @@
       type: 'line',
       source: 'baseline',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#9aa0a6', 'line-width': 4, 'line-dasharray': [1, 2], 'line-opacity': 0.8 },
+      paint: { 'line-color': C.slate, 'line-width': 4, 'line-dasharray': [1, 2], 'line-opacity': 0.75 },
     });
     map.addSource('route', { type: 'geojson', data: EMPTY });
     map.addLayer({
@@ -105,14 +134,16 @@
       type: 'line',
       source: 'route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#1558b3', 'line-width': 9, 'line-opacity': 0.9 },
+      // Cream core on a brass casing. The landing page's --primary is cream,
+      // not a chromatic accent, so the route reads as the brand's own line.
+      paint: { 'line-color': C.brassDim, 'line-width': 9, 'line-opacity': 0.95 },
     });
     map.addLayer({
       id: 'route-line',
       type: 'line',
       source: 'route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#4285F4', 'line-width': 5.5 },
+      paint: { 'line-color': C.cream, 'line-width': 5.5 },
     });
 
     // --- sensors ---
@@ -122,17 +153,17 @@
       type: 'circle',
       source: 'sensors',
       filter: ['==', ['get', 'state'], 'flooded'],
-      paint: { 'circle-color': '#ea4335', 'circle-opacity': 0.25, 'circle-radius': 14 },
+      paint: { 'circle-color': C.danger, 'circle-opacity': 0.28, 'circle-radius': 14 },
     });
     map.addLayer({
       id: 'sensor-pt',
       type: 'circle',
       source: 'sensors',
       paint: {
-        'circle-color': ['case', ['==', ['get', 'state'], 'flooded'], '#ea4335', '#34a853'],
+        'circle-color': ['case', ['==', ['get', 'state'], 'flooded'], C.danger, C.jade],
         'circle-radius': ['case', ['==', ['get', 'state'], 'flooded'], 9, 6.5],
         'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff',
+        'circle-stroke-color': C.cream,
       },
     });
 
@@ -261,11 +292,11 @@
     fromMarker?.remove();
     toMarker?.remove();
     if (state.from)
-      fromMarker = new maplibregl.Marker({ color: '#5f6368', scale: 0.8 })
+      fromMarker = new maplibregl.Marker({ color: C.slate, scale: 0.8 })
         .setLngLat([state.from.lon, state.from.lat])
         .addTo(map);
     if (state.to)
-      toMarker = new maplibregl.Marker({ color: '#ea4335' })
+      toMarker = new maplibregl.Marker({ color: C.brass })
         .setLngLat([state.to.lon, state.to.lat])
         .addTo(map);
   }
@@ -332,7 +363,7 @@
     const pts = readings
       .map((r, i) => `${((i / Math.max(1, readings.length - 1)) * w).toFixed(1)},${(h - (r.depth_m / max) * h).toFixed(1)}`)
       .join(' ');
-    return `<svg class="pp-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="#4285F4" stroke-width="2"/></svg>`;
+    return `<svg class="pp-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${C.brass}" stroke-width="2"/></svg>`;
   }
 
   function onSensorClick(e) {
@@ -499,17 +530,30 @@
       });
       const data = await resp.json();
       status.textContent = data.ok ? 'Thanks — we’ll be in touch.' : 'Something went wrong. Try again?';
-      status.style.color = data.ok ? '#188038' : '#c5221f';
+      status.style.color = data.ok ? C.jade : C.danger;
       if (data.ok) $('inqForm').reset();
     } catch (_) {
       status.textContent = 'Network error. Try again?';
-      status.style.color = '#c5221f';
+      status.style.color = C.danger;
     }
   };
 
   // ---------- pitch scenario deep-link ----------
   function runScenario() {
     const scenario = new URLSearchParams(location.search).get('scenario');
+
+    // ?scenario=dungog — frame the proposed pilot network, no route drawn.
+    // This view exists to be screenshotted for the council one-pager, so it
+    // stays deliberately bare: the route line competes with the density
+    // argument the pins are there to make.
+    if (scenario === 'dungog') {
+      map.fitBounds(DUNGOG.bounds, {
+        padding: { top: 80, bottom: 110, left: 50, right: 50 },
+        duration: 0,
+      });
+      return;
+    }
+
     if (scenario !== 'pitch') return;
     state.from = PITCH.from;
     state.to = PITCH.to;

@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>MercuriL — the map that sees the flood</title>
   <meta name="description" content="Live prototype: real NSW road-closure data + the MercuriL flood-sensor network. Toggle to see what your map is missing.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%234285F4'/%3E%3Ccircle cx='12' cy='12' r='4.5' fill='%23fff'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#283648">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23283648'/%3E%3Ccircle cx='12' cy='12' r='6.5' fill='none' stroke='%23E0B45C' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23F3EFE8'/%3E%3C/svg%3E">
+  <!-- Same two faces the mercuril.com landing page imports. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap">
   <link rel="stylesheet" href="/vendor/maplibre-gl.css">
   <link rel="stylesheet" href="/ui.css">
 </head>
@@ -16,11 +21,11 @@
   <div class="panel" id="panel">
     <div class="searchbox" id="searchbox">
       <button class="iconbtn" id="menuBtn" title="About MercuriL" aria-label="About">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="#5f6368" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
       </button>
       <input id="searchInput" type="text" placeholder="Search here" autocomplete="off">
       <button class="iconbtn" id="dirBtn" title="Directions" aria-label="Directions">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="#4285F4" d="M21.71 11.29l-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42l9 9a1 1 0 0 0 1.42 0l9-9a1 1 0 0 0 0-1.42zM14 14.5V12h-4v3H8v-4a1 1 0 0 1 1-1h5V7.5l3.5 3.5z"/></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21.71 11.29l-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42l9 9a1 1 0 0 0 1.42 0l9-9a1 1 0 0 0 0-1.42zM14 14.5V12h-4v3H8v-4a1 1 0 0 1 1-1h5V7.5l3.5 3.5z"/></svg>
       </button>
     </div>
 
@@ -34,7 +39,7 @@
         <input id="toInput" type="text" placeholder="Choose destination" autocomplete="off">
       </div>
       <button class="iconbtn swap" id="swapBtn" title="Swap" aria-label="Swap">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#5f6368" d="M7 3l-5 5 5 5V9h9V7H7V3zm10 8v4H8v2h9v4l5-5-5-5z"/></svg>
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 3l-5 5 5 5V9h9V7H7V3zm10 8v4H8v2h9v4l5-5-5-5z"/></svg>
       </button>
     </div>
 

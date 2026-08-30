@@ -36,7 +36,7 @@
 
       function markerEl(state) {
         const el = document.createElement('div');
-        el.style.cssText = `width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:grab;background:${state === 'flooded' ? '#ea4335' : '#34a853'}`;
+        el.style.cssText = `width:18px;height:18px;border-radius:50%;border:3px solid #f3efe8;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:grab;background:${state === 'flooded' ? '#d74242' : '#5dac8f'}`;
         return el;
       }
 
@@ -68,7 +68,7 @@
             markers.set(s.id, m);
           } else {
             m.setLngLat([s.lon, s.lat]);
-            m.getElement().style.background = s.state === 'flooded' ? '#ea4335' : '#34a853';
+            m.getElement().style.background = s.state === 'flooded' ? '#d74242' : '#5dac8f';
           }
         }
         for (const [id, m] of markers) if (!sensors.find((s) => s.id === id)) { m.remove(); markers.delete(id); }
@@ -79,7 +79,7 @@
           .map(
             (s) => `<div class="sensor">
           <div class="s-head">
-            <span class="s-dot" style="background:${s.state === 'flooded' ? '#ea4335' : '#34a853'}"></span>
+            <span class="s-dot" style="background:${s.state === 'flooded' ? '#d74242' : '#5dac8f'}"></span>
             <span class="s-name">${s.name}</span>
             <button class="s-del" data-del="${s.id}" title="Delete">✕</button>
           </div>
