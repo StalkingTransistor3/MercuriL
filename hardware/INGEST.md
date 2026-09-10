@@ -1,11 +1,86 @@
 # Sensor → Map: the wire contract
 
-What the firmware talks to. Live on the prototype server as of 2026-08-08 — the
-map end is finished and tested, so the device end can be built against it now.
+What the firmware talks to. Two contracts live side by side on `/api/ingest`:
 
-Implements the payload in `SENSOR-DESIGN.md` §6. Send that JSON as-is; unknown
-keys are stored rather than rejected, so you can add fields without waiting on
-a server change.
+- **v0.5 (current, 2026-09-10)** — the schema the real firmware ships. Bearer
+  auth with one shared fleet token. This section.
+- **Legacy (2026-08-08)** — the per-device-token contract from
+  `SENSOR-DESIGN.md` §6, still served for `fake-device.js`. Sections 1–5 below.
+
+---
+
+## The v0.5 contract (what mercuril-01 actually sends)
+
+```
+POST /api/ingest
+Content-Type: application/json
+Authorization: Bearer <shared token>     # DEVICE_TOKEN env on the server
+```
+
+```json
+{
+  "device": "mercuril-01", "fw": "0.5", "uptime_s": 12345,
+  "class": "OPEN", "depth": 0.123, "vel": 0.45, "dv": 0.0554,
+  "range": 1.234, "dry": 1.357, "echo_pct": 100,
+  "batV": 11.85, "batPct": 62, "src": "wifi"
+}
+```
+
+Server behaviour, all deliberate:
+
+- **Returns 200 fast** — insert, respond, then project onto the map afterwards.
+- **`received_at` is stamped server-side.** The device has no clock; `uptime_s`
+  is stored only so the plot can mark reboots (uptime going backwards).
+- **`class`** ∈ `OPEN | WARNING | CLOSED | UNCAL | NO_TARGET` (case-folded).
+- **Under `UNCAL`/`NO_TARGET`, `depth`/`vel`/`dv` are stored as NULL**, not the
+  0.0 the firmware sends — zero is a measurement, null is an admission, and the
+  plot must never draw a confident 0.0 the radar didn't take.
+- Rows land in the `telemetry` table verbatim (full payload kept in `raw`).
+- **Map projection:** if a map pin was provisioned with this `device_id`
+  (POST `/api/devices` — the token it returns is unused on this path), the pin
+  follows: `OPEN`→clear, `WARNING`/`CLOSED`→flooded, `UNCAL`/`NO_TARGET` hold
+  the previous state. Fails toward closed, never toward safe, as ever.
+- 401 = wrong token · 503 = `DEVICE_TOKEN` not configured on the server.
+
+**Read it back:** `GET /api/series?device=mercuril-01&hours=24` returns the
+array of records, oldest first (hours ≤ 336). `GET /api/telemetry/devices`
+lists every device ever heard with its last report.
+
+**See it:** `/telemetry` — depth/vel/dv against time with the class as a
+coloured band, battery on its own strip, reboot markers, satellite points
+ringed. Live-refreshes every 15 s.
+
+**Bench-test it:** `TOKEN=<token> BASE=http://localhost:3000 node
+hardware/fake-telemetry.js` walks a full flood cycle (UNCAL boot → rise →
+CLOSED peak → recession → NO_TARGET dropout → a reboot) in this schema.
+
+### Satellite (Rock7 / RockBLOCK)
+
+Point the Rock7 delivery webhook at `POST /api/rock7?secret=<ROCK7_SECRET>`.
+It takes the standard form-encoded delivery, hex-decodes `data` and expects
+ASCII CSV:
+
+```
+M,1,cls,depth_mm,vel_cms,n,dmin_mm,dmax_mm,echo_pct,seq,reason,flags
+```
+
+`cls` 0/1/2 → OPEN/WARNING/CLOSED (any other code lands as UNCAL — an unknown
+class means the numbers can't be trusted, so they null). `depth_mm/1000`,
+`vel_cms/100`, `dv = depth × vel`. Iridium's `transmit_time` is used as the
+timestamp (its clock is real, and store-and-forward can arrive late);
+`n/dmin/dmax/seq/reason/flags` + IMEI land in `raw`. Same table, same plot,
+`src: "sat"`. Device is resolved from `ROCK7_DEVICES` env
+(`imei=device,imei=device`), defaulting to `mercuril-01`. The endpoint answers
+200 even on a payload it can't parse — Rock7 retries non-200s for 24 h and a
+bad payload won't improve with retrying.
+
+### Env summary (Railway)
+
+| Var | Purpose |
+|---|---|
+| `DEVICE_TOKEN` | the shared Bearer token — ingest is OFF until set |
+| `ROCK7_SECRET` | optional; if set, `/api/rock7` requires `?secret=` |
+| `ROCK7_DEVICES` | optional `imei=device` map for multi-unit satellite |
 
 ---
 

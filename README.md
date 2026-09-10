@@ -26,16 +26,22 @@ lib/db.js       schema + pool + demo-sensor seed (closures/sensors/readings/inqu
 lib/etl.js      ArcGIS -> Postgres sync (boot-if-stale + daily)
 lib/routing.js  Valhalla/OSRM proxy, flood buffers, hazard detection
 server.js       API: /api/closures /api/closures/stats /api/sensors /api/devices
-                     /api/ingest /api/route /api/geocode /api/etl/* /api/inquire
+                     /api/ingest /api/series /api/telemetry/devices /api/rock7
+                     /api/route /api/geocode /api/etl/* /api/inquire
 public/         the app (index.html) + mission control (admin.html)
+                + the telemetry console (telemetry.html)
 hardware/       sensor design brief + the device wire contract (INGEST.md)
 ```
 
 ## Hardware ingest
 
-Real units post to `POST /api/ingest` with a per-device token — see
-[`hardware/INGEST.md`](hardware/INGEST.md) for the contract, and
-`node hardware/fake-device.js` to drive a full flood cycle without hardware.
+Real units post the v0.5 firmware payload to `POST /api/ingest` with a shared
+Bearer token (`DEVICE_TOKEN` env); satellite reports arrive via the Rock7
+webhook on `/api/rock7` and land in the same table. `GET /api/series` reads it
+back, and `/telemetry` plots it — depth/velocity/d×v against receive time with
+the device's class as a coloured band, battery below, reboots marked. See
+[`hardware/INGEST.md`](hardware/INGEST.md) for both wire contracts, and
+`node hardware/fake-telemetry.js` to drive a full flood cycle without hardware.
 
 Two rules the server enforces, both deliberate: an `unknown` reading never
 clears a flooded crossing (fails toward closed, never toward safe), and a

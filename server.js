@@ -14,6 +14,11 @@ const { route } = require('./lib/routing');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY;
+// One shared token for the fleet (v0.5 firmware sends it as a Bearer header).
+// Unset = telemetry ingest disabled, same safe-default pattern as ADMIN_KEY.
+const DEVICE_TOKEN = process.env.DEVICE_TOKEN;
+// Rock7 webhooks can't carry custom headers; the shared secret rides the URL.
+const ROCK7_SECRET = process.env.ROCK7_SECRET;
 
 const VALID_INQUIRY_TYPES = new Set([
   'Council pilot',
@@ -57,6 +62,8 @@ app.use(
 );
 
 app.use(express.json({ limit: '32kb' }));
+// Rock7 delivers satellite messages as form-encoded POSTs.
+app.use(express.urlencoded({ extended: false, limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 // ---------- helpers ----------
@@ -340,10 +347,210 @@ const ingestLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// The hardware endpoint. Accepts the payload defined in
-// hardware/SENSOR-DESIGN.md §6 verbatim; unknown keys are kept in `raw` so
-// firmware can add fields without waiting on a server change.
+// ---------- v0.5 firmware telemetry ----------
+
+const TELEMETRY_CLASSES = new Set(['OPEN', 'WARNING', 'CLOSED', 'UNCAL', 'NO_TARGET']);
+
+const tnum = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+// Project a telemetry report onto the map's sensors table, if a pin has been
+// provisioned with this device_id (POST /api/devices). No pin = telemetry is
+// still recorded, the map just doesn't know about the unit yet. Runs after
+// the 200 has gone back to the device — ingest must return fast.
+//
+// Same doctrine as the legacy path: fails toward closed, never toward safe.
+// WARNING shows flooded (the pilot's own scope is warn/closed LEDs only), and
+// UNCAL/NO_TARGET hold the previous state — a blind sensor doesn't clear a road.
+async function projectTelemetry(device, cls, depth, vel, dv, batV, batPct) {
+  const db = getPool();
+  const state =
+    cls === 'OPEN' ? 'clear' : cls === 'WARNING' || cls === 'CLOSED' ? 'flooded' : null;
+  const { rows } = await db.query(
+    `UPDATE sensors SET
+       state        = COALESCE($1, state),
+       depth_m      = COALESCE($2, depth_m),
+       device_state = $3,
+       velocity_ms  = COALESCE($4, velocity_ms),
+       dv_product   = COALESCE($5, dv_product),
+       batt_v       = COALESCE($6, batt_v),
+       battery_pct  = COALESCE($7, battery_pct),
+       source = 'device', last_seen = now()
+     WHERE device_id = $8
+     RETURNING id, state, depth_m`,
+    [state, depth, cls, vel, dv, batV, batPct, device]
+  );
+  if (rows.length && state !== null) {
+    await db.query(
+      `INSERT INTO sensor_readings (sensor_id, depth_m, state, velocity_ms, dv_product, device_state)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [rows[0].id, depth ?? rows[0].depth_m ?? 0, rows[0].state, vel, dv, cls]
+    );
+  }
+}
+
+// Store one v0.5-shaped record and kick the map projection. Shared by the
+// Wi-Fi and satellite paths — same table, same plot.
+async function storeTelemetry({ device, src, fw, uptime_s, cls, depth, vel, dv, range, dry, echo_pct, batV, batPct, raw, received_at }) {
+  // The firmware reports 0.0 for depth/vel/dv when it has no target or no
+  // calibration. Store NULL — a zero here would plot as "confidently dry".
+  const measured = cls !== 'UNCAL' && cls !== 'NO_TARGET';
+  const d = measured ? tnum(depth) : null;
+  const v = measured ? tnum(vel) : null;
+  const p = measured ? tnum(dv) : null;
+  const { rows } = await getPool().query(
+    `INSERT INTO telemetry (device, received_at, src, fw, uptime_s, class, depth, vel, dv,
+                            range_m, dry_m, echo_pct, bat_v, bat_pct, raw)
+     VALUES ($1, COALESCE($2, now()), $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     RETURNING id, received_at`,
+    [device, received_at || null, src, fw, tnum(uptime_s), cls, d, v, p,
+     tnum(range), tnum(dry), tnum(echo_pct), tnum(batV), tnum(batPct), raw]
+  );
+  projectTelemetry(device, cls, d, v, p, tnum(batV), tnum(batPct)).catch((err) =>
+    console.error('telemetry map projection failed', err.message)
+  );
+  return rows[0];
+}
+
+// The v0.5 firmware wire: Authorization: Bearer <shared fleet token>, body is
+// the device's own JSON verbatim. received_at is stamped server-side — the
+// device has no clock, and uptime_s is only useful for spotting reboots.
+async function ingestTelemetry(req, res) {
+  if (!DEVICE_TOKEN) {
+    return res.status(503).json({ ok: false, error: 'DEVICE_TOKEN not configured' });
+  }
+  const auth = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (auth !== DEVICE_TOKEN) return res.status(401).json({ ok: false, error: 'bad token' });
+  const b = req.body || {};
+  const device = String(b.device || '').trim().slice(0, 64);
+  const cls = String(b.class || '').toUpperCase();
+  if (!device || !TELEMETRY_CLASSES.has(cls)) {
+    return res.status(400).json({ ok: false, error: 'device and class (OPEN|WARNING|CLOSED|UNCAL|NO_TARGET) required' });
+  }
+  try {
+    const row = await storeTelemetry({
+      device, src: b.src === 'sat' ? 'sat' : 'wifi', fw: b.fw ? String(b.fw).slice(0, 32) : null,
+      uptime_s: b.uptime_s, cls, depth: b.depth, vel: b.vel, dv: b.dv,
+      range: b.range, dry: b.dry, echo_pct: b.echo_pct, batV: b.batV, batPct: b.batPct, raw: b,
+    });
+    res.json({ ok: true, id: row.id, received_at: row.received_at });
+  } catch (err) {
+    console.error('telemetry ingest failed', err.message);
+    res.status(500).json({ ok: false, error: 'ingest failed' });
+  }
+}
+
+// Everything the plot needs: the stored records for one device, oldest first.
+app.get('/api/series', async (req, res) => {
+  const device = String(req.query.device || '').trim().slice(0, 64);
+  if (!device) return res.status(400).json({ ok: false, error: 'device required' });
+  const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 24 * 14);
+  try {
+    const { rows } = await getPool().query(
+      `SELECT device, received_at, src, fw, uptime_s::int AS uptime_s, class,
+              depth, vel, dv, range_m AS range, dry_m AS dry, echo_pct,
+              bat_v AS "batV", bat_pct AS "batPct"
+         FROM telemetry
+        WHERE device = $1 AND received_at > now() - $2 * interval '1 hour'
+        ORDER BY received_at ASC
+        LIMIT 20000`,
+      [device, hours]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('series failed', err.message);
+    res.status(500).json({ ok: false, error: 'series query failed' });
+  }
+});
+
+// Which devices have ever reported, and when we last heard from each.
+app.get('/api/telemetry/devices', async (_req, res) => {
+  try {
+    const { rows } = await getPool().query(
+      `SELECT DISTINCT ON (device) device, received_at, src, class, bat_pct AS "batPct"
+         FROM telemetry ORDER BY device, received_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('telemetry devices failed', err.message);
+    res.status(500).json({ ok: false, error: 'query failed' });
+  }
+});
+
+// ---------- satellite ingest (Rock7 / RockBLOCK webhook) ----------
+//
+// Rock7 POSTs form-encoded fields (imei, serial, momsn, transmit_time, data)
+// where `data` is the message payload hex-encoded. Ours is ASCII CSV:
+//
+//   M,1,cls,depth_mm,vel_cms,n,dmin_mm,dmax_mm,echo_pct,seq,reason,flags
+//
+// cls 0/1/2 -> OPEN/WARNING/CLOSED (anything else lands as UNCAL: over sat we
+// only ever compress the three actionable classes; an unknown code means the
+// measurement can't be trusted, so it gets the class that nulls it). depth_mm
+// /1000 and vel_cms /100 recover SI units; dv is depth*vel by definition.
+// Same table, same plot, src='sat'.
+//
+// Always answer 200 once authorised — Rock7 retries on non-200 for 24h, and a
+// payload we can't parse today won't parse on the 40th retry either.
+const ROCK7_DEVICES = Object.fromEntries(
+  (process.env.ROCK7_DEVICES || '')
+    .split(',')
+    .map((kv) => kv.split('=').map((s) => s.trim()))
+    .filter((kv) => kv.length === 2 && kv[0] && kv[1])
+);
+
+app.post('/api/rock7', ingestLimiter, async (req, res) => {
+  if (ROCK7_SECRET && req.query.secret !== ROCK7_SECRET) {
+    return res.status(401).json({ ok: false, error: 'bad secret' });
+  }
+  const b = req.body || {};
+  try {
+    const text = Buffer.from(String(b.data || ''), 'hex').toString('utf8').trim();
+    const f = text.split(',');
+    if (f[0] !== 'M' || f[1] !== '1' || f.length < 9) {
+      console.error('rock7: unrecognised payload', JSON.stringify(text.slice(0, 80)));
+      return res.json({ ok: false, ignored: 'unrecognised payload' });
+    }
+    const cls = ['OPEN', 'WARNING', 'CLOSED'][Number(f[2])] || 'UNCAL';
+    const depth = Number(f[3]) / 1000;
+    const vel = Number(f[4]) / 100;
+    const device =
+      ROCK7_DEVICES[String(b.imei || '')] || ROCK7_DEVICES[String(b.serial || '')] || 'mercuril-01';
+    if (!ROCK7_DEVICES[String(b.imei || '')] && !ROCK7_DEVICES[String(b.serial || '')]) {
+      console.log(`rock7: imei ${b.imei || '?'} not in ROCK7_DEVICES, defaulting to ${device}`);
+    }
+    // Iridium stamps transmit_time ("YY-MM-DD HH:MM:SS" UTC) with its own
+    // clock — unlike the device it can be trusted, and a store-and-forward
+    // message can land minutes late, so prefer it over arrival time.
+    let received_at = null;
+    const tt = String(b.transmit_time || '').match(/^(\d\d)-(\d\d)-(\d\d) (\d\d:\d\d:\d\d)$/);
+    if (tt) received_at = new Date(`20${tt[1]}-${tt[2]}-${tt[3]}T${tt[4]}Z`);
+    const row = await storeTelemetry({
+      device, src: 'sat', fw: null, uptime_s: null, cls,
+      depth: Number.isFinite(depth) ? depth : null,
+      vel: Number.isFinite(vel) ? vel : null,
+      dv: Number.isFinite(depth * vel) ? depth * vel : null,
+      range: null, dry: null, echo_pct: Number(f[8]),
+      batV: null, batPct: null,
+      raw: {
+        csv: text, n: Number(f[5]), dmin_mm: Number(f[6]), dmax_mm: Number(f[7]),
+        seq: Number(f[9]), reason: f[10] ?? null, flags: f[11] ?? null,
+        imei: b.imei || null, serial: b.serial || null, momsn: b.momsn || null,
+        transmit_time: b.transmit_time || null,
+      },
+      received_at,
+    });
+    res.json({ ok: true, id: row.id });
+  } catch (err) {
+    console.error('rock7 ingest failed', err.message);
+    res.json({ ok: false, error: 'ingest failed' });
+  }
+});
+
+// The hardware endpoint. v0.5 firmware authenticates with a Bearer token and
+// is handled by ingestTelemetry; the older per-device-token contract
+// (hardware/SENSOR-DESIGN.md §6, fake-device.js) still works underneath.
 app.post('/api/ingest', ingestLimiter, async (req, res) => {
+  if (req.get('authorization')) return ingestTelemetry(req, res);
   const body = req.body || {};
   const token = req.get('x-device-token');
   const deviceId = body.sensor_id || body.device_id;
