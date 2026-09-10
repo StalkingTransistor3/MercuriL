@@ -357,6 +357,25 @@ const TELEMETRY_CLASSES = new Set(['OPEN', 'WARNING', 'CLOSED', 'UNCAL', 'NO_TAR
 
 const tnum = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+// Rejection is not permission to forget. Any payload the typed endpoints
+// turn away still gets remembered in raw_hooks, tagged with why, so a
+// misbehaving firmware build loses an HTTP status, never data. Best-effort:
+// if even this insert fails there is nothing left to keep it with.
+async function keepInNet(req, tag, text, json) {
+  try {
+    const { rows } = await getPool().query(
+      `INSERT INTO raw_hooks (content_type, authed, ip, headers, bytes, body_text, body_json)
+       VALUES ($1, false, $2, $3, $4, $5, $6) RETURNING id`,
+      [tag, req.ip, {}, text ? Buffer.byteLength(text) : 0, text,
+       json ? JSON.stringify(json) : null]
+    );
+    return rows[0].id;
+  } catch (err) {
+    console.error('net keep failed', err.message);
+    return null;
+  }
+}
+
 // Project a telemetry report onto the map's sensors table, if a pin has been
 // provisioned with this device_id (POST /api/devices). No pin = telemetry is
 // still recorded, the map just doesn't know about the unit yet. Runs after
@@ -419,16 +438,21 @@ async function storeTelemetry({ device, src, fw, uptime_s, cls, depth, vel, dv, 
 // the device's own JSON verbatim. received_at is stamped server-side — the
 // device has no clock, and uptime_s is only useful for spotting reboots.
 async function ingestTelemetry(req, res) {
+  const b = req.body || {};
   if (!DEVICE_TOKEN) {
-    return res.status(503).json({ ok: false, error: 'DEVICE_TOKEN not configured' });
+    const kept = await keepInNet(req, 'ingest-rejected:no-server-token', JSON.stringify(b), b);
+    return res.status(503).json({ ok: false, error: 'DEVICE_TOKEN not configured', kept });
   }
   const auth = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (auth !== DEVICE_TOKEN) return res.status(401).json({ ok: false, error: 'bad token' });
-  const b = req.body || {};
+  if (auth !== DEVICE_TOKEN) {
+    const kept = await keepInNet(req, 'ingest-rejected:bad-token', JSON.stringify(b), b);
+    return res.status(401).json({ ok: false, error: 'bad token', kept });
+  }
   const device = String(b.device || '').trim().slice(0, 64);
   const cls = String(b.class || '').toUpperCase();
   if (!device || !TELEMETRY_CLASSES.has(cls)) {
-    return res.status(400).json({ ok: false, error: 'device and class (OPEN|WARNING|CLOSED|UNCAL|NO_TARGET) required' });
+    const kept = await keepInNet(req, 'ingest-rejected:bad-shape', JSON.stringify(b), b);
+    return res.status(400).json({ ok: false, error: 'device and class (OPEN|WARNING|CLOSED|UNCAL|NO_TARGET) required', kept });
   }
   try {
     const row = await storeTelemetry({
@@ -660,8 +684,10 @@ app.post('/api/rock7', ingestLimiter, async (req, res) => {
       JSON.stringify(text.slice(0, 80)));
     res.json({ ok: true, kept: 'raw', id: rows[0].id });
   } catch (err) {
+    // A genuine storage failure must NOT answer 200 — that tells Rock7
+    // "delivered" and the message is gone forever. 500 makes it retry.
     console.error('rock7 ingest failed', err.message);
-    res.json({ ok: false, error: 'ingest failed' });
+    res.status(500).json({ ok: false, error: 'ingest failed' });
   }
 });
 
@@ -878,6 +904,18 @@ app.post('/api/inquire', intakeLimiter, async (req, res) => {
     console.error('inquiry insert failed', err.message);
     return res.status(502).json({ ok: false, error: 'Could not record submission' });
   }
+});
+
+// ---------- last-resort catch ----------
+
+// A body the JSON parser refused is still a body somebody sent. body-parser
+// hands the raw string back on the error object; keep it before answering.
+app.use(async (err, req, res, next) => {
+  if (err && err.type === 'entity.parse.failed' && req.path.startsWith('/api/')) {
+    const kept = await keepInNet(req, 'parse-rejected', typeof err.body === 'string' ? err.body : null, null);
+    return res.status(400).json({ ok: false, error: 'unparseable body', kept });
+  }
+  next(err);
 });
 
 // ---------- boot ----------
