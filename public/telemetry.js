@@ -27,6 +27,9 @@ const CLASSES = {
   CLOSED: { fill: 'hsl(0 65% 55% / .14)', strip: 'hsl(0 65% 55%)' },
   UNCAL: { fill: 'hsl(40 25% 90% / .05)', strip: 'hsl(40 25% 90% / .35)' },
   NO_TARGET: { fill: 'hsl(40 25% 90% / .05)', strip: 'hsl(40 25% 90% / .35)' },
+  // Satellite batches carry measurements but no class — the device didn't
+  // judge, so neither does the band. Grey, same as "can't see".
+  UNCLASSED: { fill: 'hsl(40 25% 90% / .05)', strip: 'hsl(40 25% 90% / .35)' },
 };
 
 const REFRESH_MS = 15_000;
@@ -211,9 +214,10 @@ function renderMain() {
       `<span class="s"><span class="sw" style="background:${sr.color}"></span>${sr.label} <small>(${sr.unit})</small></span>`
     ).join('') +
     '<span class="gap"></span>' +
-    ['OPEN', 'WARNING', 'CLOSED', 'UNCAL/NO_TARGET'].map((k) => {
-      const c = CLASSES[k.split('/')[0]];
-      return `<span class="cls"><span class="b" style="background:${c.strip}"></span>${k.toLowerCase().replace('_', ' ')}</span>`;
+    [['OPEN', 'open'], ['WARNING', 'warning'], ['CLOSED', 'closed'],
+     ['UNCAL', 'unclassed / uncal / no target']].map(([k, label]) => {
+      const c = CLASSES[k];
+      return `<span class="cls"><span class="b" style="background:${c.strip}"></span>${label}</span>`;
     }).join('');
 }
 

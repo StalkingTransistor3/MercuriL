@@ -57,22 +57,41 @@ CLOSED peak → recession → NO_TARGET dropout → a reboot) in this schema.
 ### Satellite (Rock7 / RockBLOCK)
 
 Point the Rock7 delivery webhook at `POST /api/rock7?secret=<ROCK7_SECRET>`.
-It takes the standard form-encoded delivery, hex-decodes `data` and expects
-ASCII CSV:
+It takes the standard form-encoded delivery, hex-decodes `data`, and parses
+two ASCII CSV formats:
+
+**M2 — batched (current):**
+
+```
+M2,<seq>,<batV_cV>,<batPct>,<echo>,<n>,<dt_s>,<d0>,<v0>,<d1>,<v1>,...
+```
+
+Oldest sample first; depths in mm, velocities in cm/s, `-1` = missing.
+Sample *i* is timestamped `transmit_time − (n−1−i)·dt` — Iridium's clock is
+real even though the device's isn't. Each sample becomes its own telemetry
+row (`src: "sat"`): `-1` lands as NULL, both-missing samples are `NO_TARGET`,
+a d×v ≥ 0.30 is derived `CLOSED` (the AR&R stability threshold, and the only
+class the server will ever invent), everything else is `UNCLASSED` — the plot
+shows the measurements under a grey band because the device didn't judge and
+the server won't pretend it did. Battery/echo describe the message, so they
+attach to the newest sample only. ~70 bytes for 6 samples = 2 credits.
+
+**M,1 — single sample (legacy):**
 
 ```
 M,1,cls,depth_mm,vel_cms,n,dmin_mm,dmax_mm,echo_pct,seq,reason,flags
 ```
 
-`cls` 0/1/2 → OPEN/WARNING/CLOSED (any other code lands as UNCAL — an unknown
-class means the numbers can't be trusted, so they null). `depth_mm/1000`,
-`vel_cms/100`, `dv = depth × vel`. Iridium's `transmit_time` is used as the
-timestamp (its clock is real, and store-and-forward can arrive late);
-`n/dmin/dmax/seq/reason/flags` + IMEI land in `raw`. Same table, same plot,
-`src: "sat"`. Device is resolved from `ROCK7_DEVICES` env
-(`imei=device,imei=device`), defaulting to `mercuril-01`. The endpoint answers
-200 even on a payload it can't parse — Rock7 retries non-200s for 24 h and a
-bad payload won't improve with retrying.
+`cls` 0/1/2 → OPEN/WARNING/CLOSED (unknown code → UNCAL, which nulls the
+numbers).
+
+**Anything else is kept anyway** — a payload matching neither format goes
+into the raw net (`raw_hooks`, tagged `rock7-unparsed`) with the decoded text
+and all the Rock7 delivery fields. Catch first, decode later; nothing that
+reaches the server is ever dropped. Device is resolved from `ROCK7_DEVICES`
+env (`imei=device,imei=device`), defaulting to `mercuril-01`. The endpoint
+answers 200 once authorised even when parsing fails — Rock7 retries non-200s
+for 24 h and a bad payload won't improve with retrying.
 
 ### The raw net — when the payload shape isn't settled yet
 

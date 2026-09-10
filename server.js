@@ -543,24 +543,37 @@ app.get('/api/raw', requireAdmin, async (req, res) => {
 // ---------- satellite ingest (Rock7 / RockBLOCK webhook) ----------
 //
 // Rock7 POSTs form-encoded fields (imei, serial, momsn, transmit_time, data)
-// where `data` is the message payload hex-encoded. Ours is ASCII CSV:
+// where `data` is the message payload hex-encoded. Two ASCII CSV formats:
+//
+//   M2,<seq>,<batV_cV>,<batPct>,<echo>,<n>,<dt_s>,<d0>,<v0>,<d1>,<v1>,...
+//     Batched, oldest sample first. Depths mm, velocities cm/s, -1 = missing.
+//     Sample i was taken at transmit_time - (n-1-i)*dt. ~70 bytes for 6
+//     samples = 2 Iridium credits. Battery/echo describe the message, not a
+//     sample — they attach to the newest sample only.
 //
 //   M,1,cls,depth_mm,vel_cms,n,dmin_mm,dmax_mm,echo_pct,seq,reason,flags
+//     Single-sample, cls 0/1/2 -> OPEN/WARNING/CLOSED (unknown -> UNCAL).
 //
-// cls 0/1/2 -> OPEN/WARNING/CLOSED (anything else lands as UNCAL: over sat we
-// only ever compress the three actionable classes; an unknown code means the
-// measurement can't be trusted, so it gets the class that nulls it). depth_mm
-// /1000 and vel_cms /100 recover SI units; dv is depth*vel by definition.
-// Same table, same plot, src='sat'.
+// M2 carries no class. The server derives ONLY the one that matters — a d×v
+// over the AR&R vehicle-stability threshold is CLOSED — and everything else
+// is honestly UNCLASSED (renders grey). Both-missing samples are NO_TARGET.
 //
-// Always answer 200 once authorised — Rock7 retries on non-200 for 24h, and a
-// payload we can't parse today won't parse on the 40th retry either.
+// A payload matching neither format is KEPT ANYWAY, in raw_hooks — the
+// standing order is catch first, decode later. Always answer 200 once
+// authorised: Rock7 retries non-200s for 24h and a payload we can't parse
+// today won't parse on the 40th retry either.
 const ROCK7_DEVICES = Object.fromEntries(
   (process.env.ROCK7_DEVICES || '')
     .split(',')
     .map((kv) => kv.split('=').map((s) => s.trim()))
     .filter((kv) => kv.length === 2 && kv[0] && kv[1])
 );
+
+function rock7Device(b) {
+  const hit = ROCK7_DEVICES[String(b.imei || '')] || ROCK7_DEVICES[String(b.serial || '')];
+  if (!hit) console.log(`rock7: imei ${b.imei || '?'} not in ROCK7_DEVICES, defaulting to mercuril-01`);
+  return hit || 'mercuril-01';
+}
 
 app.post('/api/rock7', ingestLimiter, async (req, res) => {
   if (ROCK7_SECRET && req.query.secret !== ROCK7_SECRET) {
@@ -570,40 +583,82 @@ app.post('/api/rock7', ingestLimiter, async (req, res) => {
   try {
     const text = Buffer.from(String(b.data || ''), 'hex').toString('utf8').trim();
     const f = text.split(',');
-    if (f[0] !== 'M' || f[1] !== '1' || f.length < 9) {
-      console.error('rock7: unrecognised payload', JSON.stringify(text.slice(0, 80)));
-      return res.json({ ok: false, ignored: 'unrecognised payload' });
-    }
-    const cls = ['OPEN', 'WARNING', 'CLOSED'][Number(f[2])] || 'UNCAL';
-    const depth = Number(f[3]) / 1000;
-    const vel = Number(f[4]) / 100;
-    const device =
-      ROCK7_DEVICES[String(b.imei || '')] || ROCK7_DEVICES[String(b.serial || '')] || 'mercuril-01';
-    if (!ROCK7_DEVICES[String(b.imei || '')] && !ROCK7_DEVICES[String(b.serial || '')]) {
-      console.log(`rock7: imei ${b.imei || '?'} not in ROCK7_DEVICES, defaulting to ${device}`);
-    }
+    const device = rock7Device(b);
+    const meta = {
+      csv: text, imei: b.imei || null, serial: b.serial || null,
+      momsn: b.momsn || null, transmit_time: b.transmit_time || null,
+    };
     // Iridium stamps transmit_time ("YY-MM-DD HH:MM:SS" UTC) with its own
     // clock — unlike the device it can be trusted, and a store-and-forward
     // message can land minutes late, so prefer it over arrival time.
-    let received_at = null;
+    let base = null;
     const tt = String(b.transmit_time || '').match(/^(\d\d)-(\d\d)-(\d\d) (\d\d:\d\d:\d\d)$/);
-    if (tt) received_at = new Date(`20${tt[1]}-${tt[2]}-${tt[3]}T${tt[4]}Z`);
-    const row = await storeTelemetry({
-      device, src: 'sat', fw: null, uptime_s: null, cls,
-      depth: Number.isFinite(depth) ? depth : null,
-      vel: Number.isFinite(vel) ? vel : null,
-      dv: Number.isFinite(depth * vel) ? depth * vel : null,
-      range: null, dry: null, echo_pct: Number(f[8]),
-      batV: null, batPct: null,
-      raw: {
-        csv: text, n: Number(f[5]), dmin_mm: Number(f[6]), dmax_mm: Number(f[7]),
-        seq: Number(f[9]), reason: f[10] ?? null, flags: f[11] ?? null,
-        imei: b.imei || null, serial: b.serial || null, momsn: b.momsn || null,
-        transmit_time: b.transmit_time || null,
-      },
-      received_at,
-    });
-    res.json({ ok: true, id: row.id });
+    if (tt) base = Date.parse(`20${tt[1]}-${tt[2]}-${tt[3]}T${tt[4]}Z`);
+    if (!Number.isFinite(base)) base = Date.now();
+
+    // ---- M2: batched samples ----
+    if (f[0] === 'M2' && f.length >= 9) {
+      const seq = Number(f[1]), batV = Number(f[2]) / 100, batPct = Number(f[3]);
+      const echo = Number(f[4]), n = Number(f[5]), dt = Number(f[6]);
+      if (Number.isInteger(n) && n >= 1 && n <= 48 && Number.isFinite(dt) && dt >= 0
+          && f.length >= 7 + 2 * n) {
+        const ids = [];
+        for (let i = 0; i < n; i++) {
+          const dmm = Number(f[7 + 2 * i]), vcm = Number(f[8 + 2 * i]);
+          const depth = Number.isFinite(dmm) && dmm >= 0 ? dmm / 1000 : null;
+          const vel = Number.isFinite(vcm) && vcm >= 0 ? vcm / 100 : null;
+          const dv = depth !== null && vel !== null ? +(depth * vel).toFixed(4) : null;
+          const cls =
+            depth === null && vel === null ? 'NO_TARGET'
+            : dv !== null && dv >= 0.3 ? 'CLOSED'
+            : 'UNCLASSED';
+          const newest = i === n - 1;
+          const row = await storeTelemetry({
+            device, src: 'sat', fw: null, uptime_s: null, cls,
+            depth, vel, dv, range: null, dry: null,
+            echo_pct: newest && Number.isFinite(echo) ? echo : null,
+            batV: newest && Number.isFinite(batV) ? batV : null,
+            batPct: newest && Number.isFinite(batPct) ? batPct : null,
+            raw: { ...meta, m2: { seq, i, n, dt_s: dt, class_derived: cls === 'CLOSED' } },
+            received_at: new Date(base - (n - 1 - i) * dt * 1000),
+          });
+          ids.push(row.id);
+        }
+        return res.json({ ok: true, format: 'M2', samples: n, ids });
+      }
+    }
+
+    // ---- M,1: legacy single sample ----
+    if (f[0] === 'M' && f[1] === '1' && f.length >= 9) {
+      const cls = ['OPEN', 'WARNING', 'CLOSED'][Number(f[2])] || 'UNCAL';
+      const depth = Number(f[3]) / 1000;
+      const vel = Number(f[4]) / 100;
+      const row = await storeTelemetry({
+        device, src: 'sat', fw: null, uptime_s: null, cls,
+        depth: Number.isFinite(depth) ? depth : null,
+        vel: Number.isFinite(vel) ? vel : null,
+        dv: Number.isFinite(depth * vel) ? depth * vel : null,
+        range: null, dry: null, echo_pct: Number(f[8]),
+        batV: null, batPct: null,
+        raw: {
+          ...meta, n: Number(f[5]), dmin_mm: Number(f[6]), dmax_mm: Number(f[7]),
+          seq: Number(f[9]), reason: f[10] ?? null, flags: f[11] ?? null,
+        },
+        received_at: new Date(base),
+      });
+      return res.json({ ok: true, format: 'M1', id: row.id });
+    }
+
+    // ---- neither format: keep it anyway ----
+    const { rows } = await getPool().query(
+      `INSERT INTO raw_hooks (content_type, authed, ip, headers, bytes, body_text, body_json)
+       VALUES ('rock7-unparsed', $1, $2, $3, $4, $5, $6) RETURNING id, received_at`,
+      [Boolean(ROCK7_SECRET), req.ip, {}, Buffer.byteLength(text), text,
+       JSON.stringify({ ...meta, fields: { ...b, data: undefined } })]
+    );
+    console.log(`rock7: unparsed payload kept in raw net (id ${rows[0].id}):`,
+      JSON.stringify(text.slice(0, 80)));
+    res.json({ ok: true, kept: 'raw', id: rows[0].id });
   } catch (err) {
     console.error('rock7 ingest failed', err.message);
     res.json({ ok: false, error: 'ingest failed' });
