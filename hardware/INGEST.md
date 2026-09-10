@@ -74,6 +74,23 @@ timestamp (its clock is real, and store-and-forward can arrive late);
 200 even on a payload it can't parse — Rock7 retries non-200s for 24 h and a
 bad payload won't improve with retrying.
 
+### The raw net — when the payload shape isn't settled yet
+
+`POST /api/raw` accepts **anything** — any content-type, any encoding,
+malformed JSON included — and remembers it verbatim with a server timestamp.
+No schema, no validation, answers 200. Use it for firmware experiments whose
+wire format doesn't exist yet: point the device at it, capture first, decide
+what the fields mean later, then graduate the settled shape to `/api/ingest`.
+
+- Auth is **recorded, not required**: send the same `Authorization: Bearer
+  <DEVICE_TOKEN>` and the row is marked `authed=true`, separable from
+  internet noise. No header still lands.
+- Stored per row: `received_at`, content-type, source IP, headers (minus
+  secrets), byte count, and the body three ways — verbatim text, parsed JSON
+  when it parses, hex when it's binary. Up to 256 KB.
+- Read back (admin only): `GET /api/raw?hours=24&limit=100` with
+  `x-admin-key`. Newest first.
+
 ### Env summary (Railway)
 
 | Var | Purpose |

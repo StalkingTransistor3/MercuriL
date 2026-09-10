@@ -61,6 +61,10 @@ app.use(
   })
 );
 
+// /api/raw must see the body as untouched bytes, and must be mounted BEFORE
+// the JSON parser: express.json 400s on malformed JSON, and the whole point
+// of the raw hook is that a malformed payload still gets remembered.
+app.use('/api/raw', express.raw({ type: () => true, limit: '256kb' }));
 app.use(express.json({ limit: '32kb' }));
 // Rock7 delivers satellite messages as form-encoded POSTs.
 app.use(express.urlencoded({ extended: false, limit: '32kb' }));
@@ -472,6 +476,66 @@ app.get('/api/telemetry/devices', async (_req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('telemetry devices failed', err.message);
+    res.status(500).json({ ok: false, error: 'query failed' });
+  }
+});
+
+// ---------- raw webhook (catch anything, remember it, decide later) ----------
+//
+// For payloads whose shape isn't settled yet. Accepts ANY method-POST body in
+// ANY encoding, stores the bytes verbatim plus every honest decode we can
+// manage (utf8 text, parsed JSON, hex for binary), stamps received_at, and
+// answers 200. It never rejects on content — the one weird packet from a
+// firmware build at 2 AM is exactly the packet worth keeping. Auth is
+// recorded, not required: a valid Bearer DEVICE_TOKEN marks the row
+// authed=true so real-unit traffic is separable from internet noise.
+app.post('/api/raw', ingestLimiter, async (req, res) => {
+  try {
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body ?? null));
+    const text = buf.toString('utf8');
+    const printable = !/[\u0000-\u0008\u000e-\u001f]/.test(text);
+    let json = null;
+    try { json = JSON.parse(text); } catch { /* not JSON — that's allowed here */ }
+    const auth = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    const headers = {};
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (!['authorization', 'cookie'].includes(k)) headers[k] = v; // never store secrets
+    }
+    const { rows } = await getPool().query(
+      `INSERT INTO raw_hooks (content_type, authed, ip, headers, bytes, body_text, body_json, body_hex)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, received_at`,
+      [
+        req.get('content-type') || null,
+        Boolean(DEVICE_TOKEN && auth === DEVICE_TOKEN),
+        req.ip,
+        headers,
+        buf.length,
+        printable ? text : null,
+        json === null ? null : JSON.stringify(json),
+        printable ? null : buf.toString('hex'),
+      ]
+    );
+    res.json({ ok: true, id: rows[0].id, received_at: rows[0].received_at });
+  } catch (err) {
+    console.error('raw hook failed', err.message);
+    res.status(500).json({ ok: false, error: 'store failed' });
+  }
+});
+
+// Read the net back, newest first. Admin-gated — the firehose stores whatever
+// anyone posted, which is not a thing to serve publicly.
+app.get('/api/raw', requireAdmin, async (req, res) => {
+  const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 24 * 30);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 1000);
+  try {
+    const { rows } = await getPool().query(
+      `SELECT * FROM raw_hooks WHERE received_at > now() - $1 * interval '1 hour'
+        ORDER BY received_at DESC LIMIT $2`,
+      [hours, limit]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('raw read failed', err.message);
     res.status(500).json({ ok: false, error: 'query failed' });
   }
 });
