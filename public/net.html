@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MercuriL — the net</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#283648">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23283648'/%3E%3Ccircle cx='12' cy='12' r='6.5' fill='none' stroke='%23D74242' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23F3EFE8'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap">
+  <link rel="stylesheet" href="/ui.css">
+  <style>
+    body { min-height: 100%; padding: 20px clamp(12px, 3vw, 32px) 48px; overflow-y: auto; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+    .head h1 { font-family: var(--display); font-weight: 400; font-size: 26px; }
+    .head h1 .l { color: var(--danger); }
+    .head .sub { font-size: 13px; color: var(--fg-3); }
+    .head .live { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
+    .keyrow { display: flex; gap: 8px; margin: 14px 0 18px; }
+    .keyrow input {
+      flex: 1; max-width: 420px; border: 1px solid var(--line); background: var(--surface-2);
+      color: var(--fg); border-radius: var(--radius); padding: 9px 12px; font: 13px var(--mono); outline: 0;
+    }
+    .keyrow input:focus { border-color: var(--brass); }
+    .keyrow button {
+      border: 0; border-radius: var(--radius); background: var(--brass); color: var(--bg);
+      font: 600 13px var(--font); padding: 9px 16px; cursor: pointer;
+    }
+    .note { font-size: 12.5px; color: var(--fg-4); margin-bottom: 16px; }
+    .catch { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+    .catch.fresh { border-color: hsl(40 68% 62% / .6); }
+    .c-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
+    .c-head .id { color: var(--fg); font-weight: 700; }
+    .c-head .tag { background: var(--surface-3); border-radius: 10px; padding: 2px 9px; font-size: 11px; }
+    .c-head .authed { color: var(--jade); }
+    .c-body { font-family: var(--mono); font-size: 12px; color: var(--fg-2); margin-top: 8px; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
+    .c-body .dec { color: var(--brass); }
+    .empty { padding: 40px 0; text-align: center; color: var(--fg-3); }
+    footer { font-size: 12px; color: var(--fg-4); margin-top: 16px; }
+    footer a { color: var(--brass); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>Mercuri<span class="l">L</span> — the net</h1>
+      <span class="sub">everything caught raw, newest first</span>
+      <span class="live" id="live"></span>
+    </div>
+    <div class="keyrow" id="keyrow">
+      <input id="key" type="password" placeholder="admin key" autocomplete="off">
+      <button id="go">watch</button>
+    </div>
+    <div class="note">Payloads land here when they match no known format — plus every rejected or
+      unparseable post, tagged with why. RockBLOCK deliveries get their hex auto-decoded below.
+      Decoded telemetry lives on the <a href="/telemetry" style="color:var(--brass)">plot</a>.</div>
+    <div id="list"><div class="empty">Enter the admin key to open the net.</div></div>
+    <footer>Refreshes every 10 s. <a href="/telemetry">telemetry</a> · <a href="/admin">mission control</a> · <a href="/">map</a></footer>
+  </div>
+  <script src="/net.js"></script>
+</body>
+</html>
