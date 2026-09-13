@@ -47,8 +47,9 @@ the device's class as a coloured band, battery below, reboots marked. See
 [`hardware/INGEST.md`](hardware/INGEST.md) for both wire contracts, and
 `node hardware/fake-telemetry.js` to drive a full flood cycle without hardware.
 
-Only a newer positive OPEN (`dry` on the legacy contract) can reopen a closure,
-and D×V ≥ 0.30 m²/s overrides OPEN. UNCAL, NO_TARGET and low-D×V UNCLASSED
+Only a fresh, newer positive OPEN (`dry` on the legacy contract), with complete
+measurements below all three WRL closure limits, can reopen a closure.
+Depth ≥ 0.30 m, speed ≥ 3.0 m/s, or D×V ≥ 0.30 m²/s overrides OPEN. UNCAL, NO_TARGET and low-D×V UNCLASSED
 reports hold the closure. Raw telemetry remains append-only. Projection completes
 before ingest acknowledges success; failure returns 500 so delivery can retry.
 Per-device row locks and observation/decision timestamps handle concurrent and
@@ -56,7 +57,7 @@ late reports. An old OPEN cannot erase newer evidence, and a blind report does
 not suppress a delayed hazard after the last positive decision.
 
 Missing channels are NULL in the latest sample. Closure-trigger time, report ID,
-class, depth, velocity and D×V persist independently in `sensor_closures` until
+class, depth, velocity, D×V and the versioned assessment persist in `sensor_closures` until
 positive reopening; historical readings and the instrument record remain intact.
 The latest sample is never padded with old values presented as current readings.
 
@@ -92,16 +93,30 @@ system's own record lifecycle, it is undocumented in the payload, and a claim
 built on it would not survive one informed question. Dates are unambiguous;
 build the argument on those.
 
-## Pilot trigger and scientific limits
+## WRL road-closure assessment
 
-The server’s single derived decision is closure at D×V ≥ 0.30 m²/s, including
-when the product computed from measured depth and velocity reaches the trigger.
-It does not derive OPEN or WARNING. The threshold is an application trigger,
-not a complete H1–H6 implementation or a guarantee about crossing conditions.
-[Smith, Modra, Tucker & Cox (2017), WRL TR 2017/07, Table ES-1](https://www.unsw.edu.au/content/dam/pdfs/engineering/civil-environmental/water-research-laboratory/publications/WRL-TR2017-07-Vehicle-Stability-Testing-for-Flood-Flows.pdf)
-discusses a small-passenger-vehicle product criterion of 0.3 alongside independent
-depth and velocity limits. This prototype does not implement all those limits.
-Do not describe a low product as permission to enter floodwater.
+The public map and telemetry console lead with a closure decision and its reason.
+Raw measurements remain available under an evidence disclosure. `/api/sensors`
+returns `assessment`: a road-state decision, an assessment of the latest sample,
+three limit checks, and the paper citation. The instrument class remains unchanged
+in telemetry; server-derived decisions are labelled separately. Existing stored
+observations are checked against newly introduced closure limits at boot, without
+creating telemetry or reopening roads.
+
+The default is the small-passenger-vehicle envelope: **close at depth ≥ 0.30 m,
+water speed ≥ 3.0 m/s, or depth × speed ≥ 0.30 m²/s**. This is a conservative
+application of [WRL TR 2017/07, Table 7-2 (p48) and Figure 7-3 (p45)](https://www.unsw.edu.au/content/dam/pdfs/engineering/civil-environmental/water-research-laboratory/publications/WRL-TR2017-07-Vehicle-Stability-Testing-for-Flood-Flows.pdf).
+Closure at equality is MercuriL's operating policy. A below-limit sample means
+no measured closure trigger; it is not permission to enter floodwater or an
+automatic OPEN. Missing/invalid measurements cannot authorize recovery. Device
+warnings and existing closures remain authoritative even below these limits.
+
+For example, 0.40 m of still water now closes despite D×V being zero. A sample
+with 0.24 m depth and zero velocity is below the screening limits, but a stale
+bench reading cannot determine the condition of an installed road. See
+[the closure policy](hardware/CLOSURE-POLICY.md) for assumptions, source discrepancy,
+recovery rules and audit fields. The paper is a vehicle-stability study; road
+integrity, debris and instrument calibration remain separate evidence requirements.
 
 ## Verification
 

@@ -389,7 +389,7 @@
     if (state.mode === 'mercuril' && r.avoided?.length) {
       const s = r.avoided[0];
       $('adTitle').textContent = r.avoided.some((s) => s.simulated) ? '⚠ Demo includes simulated flooding — rerouted' : '⚠ Sensor closure ahead — rerouted';
-      $('adBody').textContent = `${sensorDisplay.label(s)}: ${s.name}. ${s.simulated ? 'Demonstration flood; this route uses simulated hazard data.' : 'Instrument closure held on this route.'} Last depth: ${sensorDisplay.metric(s.depth_m, 'm')}.`;
+      $('adBody').textContent = `${sensorDisplay.label(s)}: ${s.name}. ${s.simulated ? 'Demonstration flood; this route uses simulated hazard data.' : (s.assessment?.reason || 'Instrument closure held on this route.')}`;
       $('adSub').textContent = `New route adds ${Math.round(r.extraMin)} min. ${sensorDisplay.freshness(s)}`;
       danger.classList.add('show');
     } else if (state.mode === 'mercuril' && r.avoidanceUnavailable) {

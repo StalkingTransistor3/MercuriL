@@ -39,7 +39,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const state = { device: null, devices: [], hours: 24, rows: [], timer: null };
+const state = { device: null, devices: [], sensor: null, hours: 24, rows: [], timer: null };
 const provenanceLabel = (d) => ({ simulated: 'SIMULATED', bench_unit: 'REAL UNIT · BENCH', real_sensor: 'REAL FIELD UNIT', unverified: 'UNVERIFIED DEVICE' }[d?.provenance] || 'UNVERIFIED DEVICE');
 
 // ---------- data ----------
@@ -65,6 +65,10 @@ async function loadSeries() {
     `/api/series?device=${encodeURIComponent(state.device)}&hours=${state.hours}`
   );
   state.rows = res.ok ? await res.json() : [];
+  try {
+    const sensors = await (await fetch('/api/sensors')).json();
+    state.sensor = sensors.features?.find((f) => f.properties.device_id === state.device)?.properties || null;
+  } catch { state.sensor = null; }
   state.rows.forEach((r) => { r.t = new Date(r.received_at).getTime(); });
   render();
 }
@@ -292,6 +296,12 @@ function tipHTML(r) {
 }
 
 function renderTiles() {
+  const decision = $('roadDecision');
+  if (state.sensor) decision.innerHTML = `<div class="cl-cat">${sensorDisplay.label(state.sensor)}</div>${sensorDisplay.decision(state.sensor)}`;
+  else {
+    const latest = state.rows.at(-1);
+    decision.innerHTML = latest?.assessment ? `<div class="cl-cat">${provenanceLabel(state.devices.find((d) => d.device === state.device))} · sample assessment</div><div class="pp-state ${latest.assessment.result === 'close' ? 'flooded' : 'unknown'}">${latest.assessment.result === 'close' ? 'CLOSURE TRIGGERED' : latest.assessment.result === 'below_limits' ? 'NO CLOSURE TRIGGER IN THIS SAMPLE' : 'ASSESSMENT INCOMPLETE'}</div><div class="cl-desc">${esc(latest.assessment.reason)}</div><div class="pp-meta">${ago(latest.t)} · no provisioned road-state decision</div>` : '';
+  }
   const last = state.rows[state.rows.length - 1];
   if (!last) { $('tiles').innerHTML = ''; return; }
   const cls = CLASSES[last.class] || CLASSES.UNCAL;
@@ -304,7 +314,7 @@ function renderTiles() {
     <div class="tile"><div class="k">Depth</div><div class="v">${val(last.depth, (v) => v.toFixed(3))} <small>m</small></div></div>
     <div class="tile"><div class="k">Velocity</div><div class="v">${val(last.vel, (v) => v.toFixed(2))} <small>m/s</small></div></div>
     <div class="tile"><div class="k">D×V</div><div class="v">${val(last.dv, (v) => v.toFixed(3))} <small>m²/s</small></div>
-      <div class="m">pilot closure trigger ≥ 0.30 m²/s${last.class_derived ? ' · server-derived CLOSED' : ''}</div></div>
+      <div class="m">one of three WRL closure checks</div></div>
     <div class="tile"><div class="k">Battery</div><div class="v">${val(last.batPct, (v) => v)}<small>%</small></div>
       <div class="m">${last.batV != null ? last.batV.toFixed(2) + ' V' : ''}</div></div>
     <div class="tile"><div class="k">Link</div><div class="v" style="font-size:15px">fw ${esc(last.fw ?? '—')}</div>

@@ -425,3 +425,13 @@ body {
 #modeNote { color: var(--fg-3); font-size: 10px; }
 body:has(.alert.show) .sensor-legend { bottom: 205px; }
 @media (max-width: 640px) { .sensor-legend { left: 8px; font-size: 10px; } }
+
+.assessment-evidence { margin-top: 10px; font-size: 11px; line-height: 1.5; }
+.assessment-evidence summary { color: var(--brass); cursor: pointer; }
+.assessment-checks { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10px; }
+.assessment-checks th, .assessment-checks td { text-align: left; padding: 5px 3px; border-bottom: 1px solid var(--line); }
+.assessment-checks .reached { color: var(--danger); }
+.road-decision { padding: 18px; margin: 16px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.road-decision .pp-state { font-size: 18px; margin-top: 7px; }
+.road-decision .assessment-checks { max-width: 540px; font-size: 12px; }
+.maplibregl-popup-content { max-height: min(650px, 70vh); overflow-y: auto; }

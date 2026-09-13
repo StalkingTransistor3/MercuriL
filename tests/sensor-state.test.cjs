@@ -30,12 +30,46 @@ test('unobserved and simulated devices have honest provenance', () => {
   assert.equal(presentation({ device_id: 'bench-fixture', deployment: 'installed' }).provenance, 'simulated');
   assert.equal(presentation({ device_id: 'fixture', deployment: 'bench' }).provenance, 'bench_unit');
 });
-test('closure popup preserves evidence, renders null honestly, escapes names', () => {
-  const html = display.popup({ name: '<script>bad</script>', device_id: 'fixture', simulated: false,
-    deployment: 'installed', state: 'flooded', depth_m: null, velocity_ms: null, dv_product: null,
-    closure: { detected_at: '2026-09-13T00:00:00Z', dv_product: .4, device_class: 'CLOSED', telemetry_id: 9 } });
-  assert.match(html, /D×V = 0.40 m²\/s/);
-  assert.match(html, /Latest depth: not measured/);
+test('closure popup leads with decision, retains evidence and escapes names', () => {
+  const row = { name: '<script>bad</script>', device_id: 'fixture', deployment: 'installed',
+    state: 'flooded', depth_m: null, velocity_ms: null, dv_product: null, device_state: 'NO_TARGET',
+    observed_at: new Date(), closure: { detected_at: '2026-09-13T00:00:00Z', dv_product: .4, device_class: 'CLOSED', telemetry_id: 9 } };
+  const html = display.popup({ ...row, ...presentation(row) });
+  assert.match(html, /KEEP ROAD CLOSED/);
+  assert.match(html, /Closed by MercuriL sensor/);
+  assert.match(html, /not measured/);
+  assert.match(html, /Measurements and WRL limits/);
+  assert.ok(!html.includes('Latest depth:'));
   assert.ok(!html.includes('<script>'));
   assert.ok(!html.includes('safe'));
+});
+
+const { assessReport } = require('../lib/flood-assessment');
+test('WRL closes deep still water and shallow fast water independently of DV', () => {
+  for (const [d,v,dv,code] of [[.3,0,0,'depth_limit'], [.4,0,0,'depth_limit'], [.05,3,.15,'velocity_limit'], [.2,1.5,.3,'dv_limit'], [.15,2,.3,'dv_limit']]) {
+    const a = assessReport('OPEN',d,v,dv);
+    assert.equal(a.result,'close'); assert.ok(a.reasons.some((r)=>r.code===code));
+    assert.equal(judgement('OPEN',d,v,dv).state,'flooded');
+  }
+});
+test('no universal 15 cm rule; below-limit sample never invents OPEN', () => {
+  for (const [d,v] of [[.15,0],[.24,0],[.299,0],[.05,2.99]]) {
+    assert.equal(assessReport('UNCLASSED',d,v,d*v).result,'below_limits');
+    assert.equal(judgement('UNCLASSED',d,v,d*v).state,null);
+  }
+});
+test('missing and invalid channels cannot reopen; independent known breach still closes', () => {
+  assert.equal(judgement('OPEN',.31,null,null).state,'flooded');
+  assert.equal(judgement('OPEN',null,3,null).state,'flooded');
+  for (const d of [null,NaN,Infinity,-1,.2]) assert.equal(judgement('OPEN',d,null,null).state,null);
+  assert.equal(assessReport('UNCAL',.5,5,2.5).result,'unknown');
+  assert.equal(assessReport('NO_TARGET',.5,5,2.5).result,'unknown');
+});
+test('bench .24 m still-water reading gets an assessment without a road-opening claim', () => {
+  const row = { device_id:'fixture', deployment:'bench', state:'clear', device_state:'UNCLASSED',
+    depth_m:.24, velocity_ms:0, dv_product:0, observed_at:'2026-09-10T06:57:15Z' };
+  const p = presentation(row, Date.parse('2026-09-13T06:57:15Z'));
+  assert.equal(p.assessment.action,'bench'); assert.equal(p.assessment.sample.result,'below_limits');
+  const html=display.popup({...row,...p});
+  assert.match(html,/LAST SAMPLE: NO CLOSURE TRIGGER/); assert.match(html,/stale observation/);
 });

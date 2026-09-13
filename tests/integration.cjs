@@ -103,7 +103,7 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
     await check('old and equal-time OPEN cannot clear a closure; newer OPEN reopens', async () => {
       const p = await field();
       for (const ts of [trigger.detected_at, p.observed_at]) {
-        const r = await api('/api/ingest', { sensor_id: 'fixture-field', state: 'dry', depth_mm: 0, ts }, { 'x-device-token': token });
+        const r = await api('/api/ingest', { sensor_id: 'fixture-field', state: 'dry', depth_mm: 0, velocity_ms: 0, dv_product: 0, ts }, { 'x-device-token': token });
         assert.equal(r.status, 200); assert.equal((await field()).state, 'flooded');
       }
       assert.equal((await wifi('OPEN', { depth: 0, vel: 0, dv: 0 })).status, 200);
@@ -159,7 +159,7 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
     });
     await check('delayed hazard after blind observation closes; legacy partial DV and metadata survive', async () => {
       const r = await api('/api/devices', { device_id: 'fixture-order', name: 'Ordering fixture', lon: 154, lat: -34 });
-      const legacy = (body) => api('/api/ingest', { sensor_id: 'fixture-order', ...body }, { 'x-device-token': r.data.device_token });
+      const legacy = (body) => api('/api/ingest', { sensor_id: 'fixture-order', ...(body.state === 'dry' ? { velocity_ms: 0, dv_product: 0 } : {}), ...body }, { 'x-device-token': r.data.device_token });
       const t = Date.now() - 10000;
       await legacy({ state: 'dry', depth_mm: 0, ts: new Date(t).toISOString() });
       await legacy({ state: 'unknown', ts: new Date(t + 2000).toISOString() });
@@ -189,6 +189,48 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
       const r = (await route('mercuril')).data;
       assert.equal(r.avoidanceUnavailable, true); assert.deepEqual(r.avoided, []);
       assert.ok(r.hazards.length); ineffective = false;
+    });
+    await check('WRL depth and velocity limits close without a DV breach; incomplete OPEN cannot reopen', async () => {
+      // Separate this scenario from the intentionally cached failed detour above.
+      await db.query('UPDATE sensors SET lon=lon+0.0001 WHERE id=$1', [id]);
+      await wifi('OPEN', {depth:0,vel:0,dv:0});
+      let r = await wifi('OPEN', {depth:.4,vel:0,dv:0});
+      assert.equal(r.data.assessment.result,'close');
+      let p = await field(); assert.equal(p.state,'flooded');
+      assert.ok(p.closure.assessment.reasons.some((r)=>r.code==='depth_limit'));
+      assert.equal((await route('mercuril')).data.avoided.some((s)=>s.id===id),true);
+      await wifi('OPEN', {depth:.2,vel:null,dv:null});
+      assert.equal((await field()).state,'flooded');
+      await wifi('OPEN', {depth:.2,vel:.5,dv:.1});
+      assert.equal((await field()).state,'clear');
+      await wifi('OPEN', {depth:.05,vel:3.1,dv:.155});
+      p=await field();assert.equal(p.state,'flooded');
+      assert.ok(p.closure.assessment.reasons.some((r)=>r.code==='velocity_limit'));
+      assert.match(p.assessment.reason,/Water speed/);
+    });
+    await check('existing observations gain new closure limits without fabricating history or contact', async () => {
+      const {reconcileAssessments}=require('../lib/sensor-state');
+      await db.query("UPDATE sensors SET state='clear',depth_m=.4,velocity_ms=0,dv_product=0,device_state='OPEN' WHERE id=$1",[id]);
+      // Emulate an old-policy open decision, after the previous closure episode.
+      await db.query('UPDATE sensor_closures SET reopened_at=now() WHERE sensor_id=$1 AND reopened_at IS NULL',[id]);
+      const before=(await db.query('SELECT last_contact,(SELECT count(*) FROM sensor_readings WHERE sensor_id=$1) AS n FROM sensors WHERE id=$1',[id])).rows[0];
+      await reconcileAssessments(db);
+      const after=(await db.query('SELECT last_contact,(SELECT count(*) FROM sensor_readings WHERE sensor_id=$1) AS n FROM sensors WHERE id=$1',[id])).rows[0];
+      assert.deepEqual(after,before);assert.equal((await field()).state,'flooded');
+      assert.ok((await field()).closure.assessment.reasons.some((r)=>r.code==='depth_limit'));
+    });
+    await check('delayed or far-future OPEN cannot reopen despite being newer than a closure', async () => {
+      const p=await api('/api/devices',{device_id:'fixture-stale-open',name:'Stale recovery fixture',lon:150,lat:-35});
+      const post=(state,depth,ts)=>api('/api/ingest',{sensor_id:'fixture-stale-open',state,depth_m:depth,velocity_ms:0,dv_product:0,ts},{'x-device-token':p.data.device_token});
+      await post('hazard',.4,new Date(Date.now()-3600000).toISOString());
+      const read=async()=>(await sensors()).find((f)=>f.properties.device_id==='fixture-stale-open').properties;
+      await post('dry',0,new Date(Date.now()-1800000).toISOString());
+      assert.equal((await read()).state,'flooded');
+      const before=(await read()).observed_at;
+      await post('dry',0,new Date(Date.now()+86400000).toISOString());
+      assert.equal((await read()).state,'flooded');assert.equal((await read()).observed_at,before);
+      await post('dry',0,new Date().toISOString());
+      assert.equal((await read()).state,'clear');
     });
     await check('projection failure returns 500 with the instrument payload retained', async () => {
       await db.query(`ALTER TABLE sensor_closures RENAME TO sensor_closures_unavailable`);
@@ -221,7 +263,9 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
           canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 930, clientY: 265 }));
         });
         await page.waitForSelector('.maplibregl-popup');
-        assert.match(await page.locator('.maplibregl-popup').innerText(), /Closed by MercuriL sensor/);
+        assert.match(await page.locator('.maplibregl-popup').innerText(), /KEEP ROAD CLOSED/);
+        assert.match(await page.locator('.maplibregl-popup').innerText(), /Water depth/);
+        assert.equal(await page.locator('.assessment-evidence').first().getAttribute('open'), null);
         await page.screenshot({ path: '/tmp/mercuril-map-desktop.png' });
         await page.locator('.maplibregl-popup-close-button').click();
         await page.setViewportSize({ width: 390, height: 844 });
@@ -236,6 +280,9 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
         const card = page.locator('.sensor').filter({ hasText: 'ISOLATED TEST crossing' });
         assert.equal(await card.locator('[data-toggle]').count(), 0);
         assert.match(await card.innerText(), /Real MercuriL sensor/);
+        await page.goto(base + '/telemetry?device=fixture-field');
+        await page.waitForFunction(() => document.getElementById('roadDecision').textContent.includes('KEEP ROAD CLOSED'));
+        assert.match(await page.locator('#roadDecision').innerText(), /Water depth/);
         assert.deepEqual(errors, []);
       });
     }

@@ -19,25 +19,44 @@
       : p.stale ? ' · report overdue; present conditions unknown' : '';
     return `Last sample ${age}${cadence}${condition}${p.state === 'flooded' ? ' · closure held until positive OPEN' : ''}`;
   }
-  function popup(p) {
-    const c = typeof p.closure === 'string' ? JSON.parse(p.closure) : p.closure;
-    const realClosure = !p.simulated && p.deployment === 'installed' && c && p.state === 'flooded';
-    const status = realClosure ? 'CLOSED BY MERCURIL SENSOR'
-      : p.state === 'flooded' ? (p.simulated ? 'SIMULATED FLOOD' : 'BENCH HAZARD REPORT')
-      : p.observation === 'reported' ? 'Open / no hazard detected at last report'
-      : p.simulated ? 'Simulated · no hazard detected' : 'Crossing condition unknown';
-    return `<div class="cl-cat">${label(p)}</div><div class="pp-name">${esc(p.name)}</div>
-      <div class="pp-state ${p.state === 'flooded' ? 'flooded' : 'unknown'}">${status}</div>
-      ${realClosure ? `<div class="cl-desc">Closed by MercuriL sensor at ${esc(when(c.detected_at))}. D×V = ${metric(c.dv_product, 'm²/s')}.</div>
-      <div class="pp-meta">${c.class_derived ? 'Server closure trigger' : 'Device report'} · ${esc(c.device_class)} · report ${esc(c.telemetry_id ?? 'legacy')}</div>` : ''}
-      ${p.deployment === 'bench' && !p.simulated ? '<div class="cl-flag warn">Bench display position · no road closure or routing effect.</div>' : ''}
-      ${p.location_note ? `<div class="pp-meta">${esc(p.location_note)}</div>` : ''}
-      <div class="pp-meta">Latest depth: ${metric(p.depth_m, 'm')} · velocity: ${metric(p.velocity_ms, 'm/s')}</div>
-      <div class="pp-meta">Latest D×V: ${metric(p.dv_product, 'm²/s')} · device: ${esc(p.device_state || 'unreported')}</div>
-      <div class="cl-flag">${esc(freshness(p))}</div>
-      ${p.device_id ? `<div class="pp-meta">${esc(p.device_id)} · battery ${p.battery_pct == null ? 'unreported' : esc(p.battery_pct) + '%'} · <a href="/telemetry?device=${encodeURIComponent(p.device_id)}">Instrument record</a></div>` : ''}`;
+  const object = (v) => typeof v === 'string' ? JSON.parse(v) : v;
+  function decision(p) {
+    const a = object(p.assessment);
+    if (!a) return '<div class="pp-state unknown">Assessment unavailable</div>';
+    const sample = a.sample;
+    const sampleTitle = sample.result === 'close' ? 'CLOSURE TRIGGERED'
+      : sample.result === 'below_limits' ? 'NO CLOSURE TRIGGER' : 'ASSESSMENT INCOMPLETE';
+    const bench = a.action === 'bench';
+    return `<div class="pp-state ${['closed','close'].includes(a.action) || sample.result === 'close' ? 'flooded' : 'unknown'}">${esc(bench ? 'LAST SAMPLE: ' + sampleTitle : a.headline)}</div>
+      <div class="cl-desc">${esc(bench ? sample.reason : a.reason)}</div>
+      ${bench ? `<div class="cl-flag warn">Bench unit · no road attached${a.current ? '' : ' · stale observation'}. No road closure or routing effect.</div>` : ''}
+      ${!bench && a.action === 'closed' && sample.result !== 'close' ? `<div class="pp-meta">Latest sample: ${sampleTitle.toLowerCase()}. The existing closure is retained.</div>` : ''}
+      ${!bench && a.action === 'unknown' && sample.result === 'below_limits' ? '<div class="pp-meta">Last sample was below the closure limits; current conditions are unknown.</div>' : ''}
+      <div class="pp-meta">Small-passenger-vehicle closure screen · ${esc(when(a.sample_at))}</div>
+      <details class="assessment-evidence"><summary>Measurements and WRL limits</summary>
+        <table class="assessment-checks"><thead><tr><th>Check</th><th>Sample</th><th>Close at</th></tr></thead><tbody>
+        ${sample.checks.map((c) => `<tr class="${c.status === 'reached' ? 'reached' : ''}"><th>${esc(c.label)}</th><td>${metric(c.value, c.unit)}</td><td>≥ ${metric(c.limit, c.unit)}</td></tr>`).join('')}
+        </tbody></table>
+        <div class="pp-meta">Any reached limit triggers closure. Missing measurements cannot establish that all checks are below their limits.</div>
+        <div class="pp-meta">Requires calibrated depth above the road and water velocity. The screen does not assess road damage or debris.</div>
+        <a href="${esc(sample.source_url)}" target="_blank" rel="noopener">WRL TR 2017/07 · ${esc(sample.source_location)}</a>
+      </details>`;
   }
-  const api = { esc, metric, when, label, freshness, popup };
+  function popup(p) {
+    const c = object(p.closure);
+    const realClosure = !p.simulated && p.deployment === 'installed' && c && p.state === 'flooded';
+    return `<div class="cl-cat">${label(p)}</div><div class="pp-name">${esc(p.name)}</div>
+      ${decision(p)}
+      ${realClosure ? `<div class="pp-meta">Closed by MercuriL sensor at ${esc(when(c.detected_at))}. ${esc(c.assessment?.reason || 'Closure retained from the recorded device report.')}</div>` : ''}
+      <div class="cl-flag">${esc(freshness(p))}</div>
+      <details class="assessment-evidence"><summary>Device and location</summary>
+        ${p.location_note ? `<div class="pp-meta">${esc(p.location_note)}</div>` : ''}
+        <div class="pp-meta">Recorded class: ${esc(p.device_state || 'unreported')} · reported D×V: ${metric(p.dv_product, 'm²/s')}</div>
+        ${p.device_id ? `<div class="pp-meta">${esc(p.device_id)} · battery ${p.battery_pct == null ? 'unreported' : esc(p.battery_pct) + '%'} · <a href="/telemetry?device=${encodeURIComponent(p.device_id)}">Instrument record</a></div>` : ''}
+      </details>`;
+  }
+
+  const api = { esc, metric, when, label, freshness, decision, popup };
   if (typeof module !== 'undefined') module.exports = api;
   else root.sensorDisplay = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -39,8 +39,8 @@ Server behaviour, all deliberate:
 - **Map projection:** if a map pin was provisioned with this `device_id`
   (POST `/api/devices` — the token it returns is unused on this path), the pin
   follows: `OPEN`→clear, `WARNING`/`CLOSED`→flooded, `UNCAL`/`NO_TARGET` hold
-  the previous state. Measured D×V ≥ 0.30 overrides OPEN; only a newer
-  positive OPEN below that trigger can reopen. Projection completes before 200.
+  the previous state. The WRL depth, speed and product limits override OPEN; only a fresh, newer
+  positive OPEN with complete measurements below all three limits can reopen. Projection completes before 200.
 - 401 = wrong token · 503 = `DEVICE_TOKEN` not configured on the server.
 
 **Read it back:** `GET /api/series?device=mercuril-01&hours=24` returns the
@@ -71,8 +71,8 @@ Oldest sample first; depths in mm, velocities in cm/s, `-1` = missing.
 Sample *i* is timestamped `transmit_time − (n−1−i)·dt` — Iridium's clock is
 real even though the device's isn't. Each sample becomes its own telemetry
 row (`src: "sat"`): `-1` lands as NULL, both-missing samples are `NO_TARGET`,
-a d×v ≥ 0.30 is derived `CLOSED` (the AR&R stability threshold, and the only
-class the server will ever invent), everything else is `UNCLASSED` — the plot
+a reached WRL depth, speed or product limit is derived `CLOSED` (the only
+class the server derives), everything else is `UNCLASSED` — the plot
 shows the measurements under a grey band because the device didn't judge and
 the server won't pretend it did. Battery/echo describe the message, so they
 attach to the newest sample only. ~70 bytes for 6 samples = 2 credits.
@@ -198,7 +198,7 @@ was believed.
 | `ts` | ISO 8601. **Send it.** If omitted, the server stamps arrival time — a unit that buffered while offline would backdate everything to the moment it reconnected. |
 | `depth_mm` | Integer millimetres. `depth_m` (float metres) also accepted. |
 | `state` | One of `dry` / `wet` / `hazard` / `unknown`. Anything else is read as `unknown`. |
-| `dv_product` | Depth × velocity, m²/s. **≥ 0.30 forces the road closed** regardless of `state` — the vehicle-stability threshold from AR&R. Confirm the exact figure against Book 6 Ch.7 before it goes on a slide; the server constant is easy to change. |
+| `dv_product` | Depth × velocity, m²/s. **≥ 0.30 forces the road closed** regardless of `state`. Depth ≥ 0.30 m and water speed ≥ 3.0 m/s also close independently. See [closure policy](CLOSURE-POLICY.md). |
 | `hazard_class` | `H1`–`H6`. **H2 or above forces the road closed.** |
 | `batt_v` | Volts. Converted to a percentage assuming 2×18650 in series (6.0 V empty, 8.4 V full) — adjust `server.js` if the pack changes. |
 
@@ -207,7 +207,8 @@ was believed.
 **1. It fails toward closed, never toward safe.** `unknown` does *not* clear a
 flooded crossing — the previous state holds. A false "flooded" annoys a driver;
 a false "clear" kills one. So a dead radar, a lost lock, or a confidence
-collapse leaves the road shut until the device positively reports `dry`.
+collapse leaves the road shut until a newer `dry`/OPEN report includes complete
+measurements below every WRL closure limit.
 
 **2. Missing measurements stay missing.** Omitted channels are NULL in the latest
 sample; earlier readings and closure-trigger evidence remain in history. Battery
@@ -275,3 +276,18 @@ ADMIN_KEY=... BASE=http://localhost:3000 node hardware/fake-device.js
 > the public map goes red inside 5 seconds → the route redraws around it.
 
 The map half of that sentence is done and tested. What's left is the device half.
+
+## Applied road-status assessment
+
+`GET /api/sensors` now includes `assessment.headline`, `assessment.reason`, and
+`assessment.sample`: `close`, `below_limits` or `unknown`, with depth/speed/product
+checks and a versioned policy reference. Ingest responses on the Wi-Fi and legacy
+paths also return the sample assessment. `/api/series` preserves the recorded device
+class and adds a separate assessment for each sample using the current policy.
+Closure episodes retain the assessment used when they were created.
+
+Depth and velocity alone no longer form the primary public status. The map shows
+the decision and cause, with measurements and paper limits under a disclosure.
+Bench samples receive a screening result but never a real road closure. A fresh
+low-D×V UNCLASSED satellite sample can still trigger closure on depth or speed;
+if all checks are below limits it holds the previous state, never inventing OPEN.

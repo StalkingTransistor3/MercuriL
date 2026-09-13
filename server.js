@@ -10,7 +10,8 @@ const crypto = require('crypto');
 const { getPool, initDb } = require('./lib/db');
 const { runEtl, scheduleEtl } = require('./lib/etl');
 const { route } = require('./lib/routing');
-const { DV_CLOSE, number: tnum, judgement, presentation, projectReport } = require('./lib/sensor-state');
+const { number: tnum, judgement, presentation, projectReport, reconcileAssessments } = require('./lib/sensor-state');
+const { assessReport } = require('./lib/flood-assessment');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -445,7 +446,7 @@ async function storeTelemetry({ device, src, fw, uptime_s, cls, depth, vel, dv, 
   await projectReport(getPool(), { device, cls, depth: d, vel: v, dv: p,
     batV: tnum(batV), batPct: tnum(batPct), src, interval_s,
     ts: rows[0].received_at, telemetry_id: rows[0].id, raw });
-  return rows[0];
+  return { ...rows[0], assessment: assessReport(cls, d, v, p) };
 }
 
 // The v0.5 firmware wire: Authorization: Bearer <shared fleet token>, body is
@@ -474,7 +475,7 @@ async function ingestTelemetry(req, res) {
       uptime_s: b.uptime_s, cls, depth: b.depth, vel: b.vel, dv: b.dv,
       range: b.range, dry: b.dry, echo_pct: b.echo_pct, batV: b.batV, batPct: b.batPct, raw: b,
     });
-    res.json({ ok: true, id: row.id, received_at: row.received_at });
+    res.json({ ok: true, id: row.id, received_at: row.received_at, assessment: row.assessment });
   } catch (err) {
     console.error('telemetry ingest failed', err.message);
     res.status(500).json({ ok: false, error: 'ingest failed' });
@@ -497,7 +498,8 @@ app.get('/api/series', async (req, res) => {
         LIMIT 20000`,
       [device, hours]
     );
-    res.json(rows.map((r) => ({ ...r, class_derived: judgement(r.class, r.depth, r.vel, r.dv).class_derived })));
+    res.json(rows.map((r) => ({ ...r, class_derived: judgement(r.class, r.depth, r.vel, r.dv).class_derived,
+      assessment: assessReport(r.class, r.depth, r.vel, r.dv) })));
   } catch (err) {
     console.error('series failed', err.message);
     res.status(500).json({ ok: false, error: 'series query failed' });
@@ -594,8 +596,8 @@ app.get('/api/raw', requireAdmin, async (req, res) => {
 //   M,1,cls,depth_mm,vel_cms,n,dmin_mm,dmax_mm,echo_pct,seq,reason,flags
 //     Single-sample, cls 0/1/2 -> OPEN/WARNING/CLOSED (unknown -> UNCAL).
 //
-// M2 carries no class. The server derives ONLY the one that matters — a d×v
-// over the AR&R vehicle-stability threshold is CLOSED — and everything else
+// M2 carries no class. The server derives only CLOSED when measurements
+// reach a WRL depth, speed or product limit — and everything else
 // is honestly UNCLASSED (renders grey). Both-missing samples are NO_TARGET.
 //
 // A payload matching neither format is KEPT ANYWAY, in raw_hooks — the
@@ -656,7 +658,7 @@ app.post('/api/rock7', ingestLimiter, async (req, res) => {
           const dv = depth !== null && vel !== null ? +(depth * vel).toFixed(4) : null;
           const cls =
             depth === null && vel === null ? 'NO_TARGET'
-            : dv !== null && dv >= DV_CLOSE ? 'CLOSED'
+            : assessReport('UNCLASSED', depth, vel, dv).result === 'close' ? 'CLOSED'
             : 'UNCLASSED';
           const newest = i === n - 1;
           const row = await storeTelemetry({
@@ -904,6 +906,7 @@ app.use(async (err, req, res, next) => {
 if (require.main === module) (async () => {
   try {
     await initDb();
+    await reconcileAssessments(getPool());
     scheduleEtl();
   } catch (err) {
     console.error('DB init failed (serving static only):', err.message);

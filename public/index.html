@@ -128,9 +128,9 @@
     </ul>
 
     <h2>How closure warnings work</h2>
-    <p>Device WARNING or CLOSED reports hold a crossing closed. The server also closes at D×V ≥ 0.30 m²/s, using measured depth and velocity. Only a newer positive OPEN report below that trigger reopens it; missing, blind or overdue reports hold the closure. A neutral pin can mean unknown conditions.</p>
+    <p>Device WARNING or CLOSED reports hold a crossing closed. The server applies a conservative small-passenger-vehicle screen: <b>depth ≥ 0.30 m, water speed ≥ 3.0 m/s, or depth × speed ≥ 0.30 m²/s</b> closes the crossing. Only a fresh, newer positive OPEN report with complete measurements below all three limits reopens it; missing, blind or overdue reports hold the closure. A neutral pin can mean unknown conditions.</p>
     <p>Satellite reports can be hourly. Each popup shows the sample age and configured cadence. The 15-minute stale flag remains visible; it never clears a closure.</p>
-    <p class="ev-foot">The pilot trigger draws on the small-passenger-vehicle criteria discussed in Smith, Modra, Tucker &amp; Cox (2017), <a href="https://www.unsw.edu.au/content/dam/pdfs/engineering/civil-environmental/water-research-laboratory/publications/WRL-TR2017-07-Vehicle-Stability-Testing-for-Flood-Flows.pdf" target="_blank" rel="noopener">UNSW WRL TR 2017/07, Table ES-1</a>. Those criteria also include depth and velocity limits. This prototype does not implement a complete vehicle-stability model or give permission to enter floodwater.</p>
+    <p class="ev-foot">The pilot trigger draws on the small-passenger-vehicle criteria discussed in Smith, Modra, Tucker &amp; Cox (2017), <a href="https://www.unsw.edu.au/content/dam/pdfs/engineering/civil-environmental/water-research-laboratory/publications/WRL-TR2017-07-Vehicle-Stability-Testing-for-Flood-Flows.pdf" target="_blank" rel="noopener">UNSW WRL TR 2017/07, Table 7-2 and Figure 7-3</a>. MercuriL closes at the limits as a conservative operating choice. Readings below them do not verify road integrity or give permission to enter floodwater; calibrated depth above the road and credible water velocity are required.</p>
 
     <h2>Talk to us</h2>
     <form id="inqForm">
