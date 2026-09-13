@@ -22,7 +22,7 @@ const SERIES = [
 ];
 
 const CLASSES = {
-  OPEN: { fill: 'hsl(158 32% 52% / .08)', strip: 'hsl(158 32% 52%)' },
+  OPEN: { fill: 'hsl(215 15% 55% / .08)', strip: 'hsl(215 15% 55%)' },
   WARNING: { fill: 'hsl(40 68% 62% / .13)', strip: 'hsl(40 68% 62%)' },
   CLOSED: { fill: 'hsl(0 65% 55% / .14)', strip: 'hsl(0 65% 55%)' },
   UNCAL: { fill: 'hsl(40 25% 90% / .05)', strip: 'hsl(40 25% 90% / .35)' },
@@ -39,17 +39,19 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const state = { device: null, hours: 24, rows: [], timer: null };
+const state = { device: null, devices: [], hours: 24, rows: [], timer: null };
+const provenanceLabel = (d) => ({ simulated: 'SIMULATED', bench_unit: 'REAL UNIT · BENCH', real_sensor: 'REAL FIELD UNIT', unverified: 'UNVERIFIED DEVICE' }[d?.provenance] || 'UNVERIFIED DEVICE');
 
 // ---------- data ----------
 
 async function loadDevices() {
   const res = await fetch('/api/telemetry/devices');
   const devices = res.ok ? await res.json() : [];
+  state.devices = devices;
   const sel = $('device');
   const want = new URLSearchParams(location.search).get('device') || state.device;
   sel.innerHTML = devices.length
-    ? devices.map((d) => `<option value="${esc(d.device)}">${esc(d.device)}</option>`).join('')
+    ? devices.map((d) => `<option value="${esc(d.device)}">${esc(d.device)} · ${provenanceLabel(d)}</option>`).join('')
     : '<option value="">no devices yet</option>';
   if (devices.length) {
     state.device = devices.some((d) => d.device === want) ? want : devices[0].device;
@@ -302,7 +304,7 @@ function renderTiles() {
     <div class="tile"><div class="k">Depth</div><div class="v">${val(last.depth, (v) => v.toFixed(3))} <small>m</small></div></div>
     <div class="tile"><div class="k">Velocity</div><div class="v">${val(last.vel, (v) => v.toFixed(2))} <small>m/s</small></div></div>
     <div class="tile"><div class="k">D×V</div><div class="v">${val(last.dv, (v) => v.toFixed(3))} <small>m²/s</small></div>
-      <div class="m">closes the road at 0.30</div></div>
+      <div class="m">pilot closure trigger ≥ 0.30 m²/s${last.class_derived ? ' · server-derived CLOSED' : ''}</div></div>
     <div class="tile"><div class="k">Battery</div><div class="v">${val(last.batPct, (v) => v)}<small>%</small></div>
       <div class="m">${last.batV != null ? last.batV.toFixed(2) + ' V' : ''}</div></div>
     <div class="tile"><div class="k">Link</div><div class="v" style="font-size:15px">fw ${esc(last.fw ?? '—')}</div>
@@ -324,9 +326,11 @@ function renderLive() {
   const last = state.rows[state.rows.length - 1];
   const live = $('live');
   if (!last) { live.classList.add('stale'); $('liveTxt').textContent = 'no data'; return; }
-  const stale = Date.now() - last.t > STALE_MS;
+  const device = state.devices.find((d) => d.device === state.device);
+  const waiting = last.src === 'sat' && device?.report_interval_s && Date.now() - last.t <= device.report_interval_s * 1000 + STALE_MS;
+  const stale = Date.now() - last.t > STALE_MS && !waiting;
   live.classList.toggle('stale', stale);
-  $('liveTxt').textContent = stale ? `stale · last heard ${ago(last.t)}` : `live · ${ago(last.t)}`;
+  $('liveTxt').textContent = `${provenanceLabel(device)} · ${waiting ? 'satellite interval' : stale ? 'report overdue' : 'recent report'} · ${ago(last.t)}`;
 }
 
 function render() {

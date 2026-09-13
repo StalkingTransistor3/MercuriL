@@ -39,7 +39,8 @@ Server behaviour, all deliberate:
 - **Map projection:** if a map pin was provisioned with this `device_id`
   (POST `/api/devices` — the token it returns is unused on this path), the pin
   follows: `OPEN`→clear, `WARNING`/`CLOSED`→flooded, `UNCAL`/`NO_TARGET` hold
-  the previous state. Fails toward closed, never toward safe, as ever.
+  the previous state. Measured D×V ≥ 0.30 overrides OPEN; only a newer
+  positive OPEN below that trigger can reopen. Projection completes before 200.
 - 401 = wrong token · 503 = `DEVICE_TOKEN` not configured on the server.
 
 **Read it back:** `GET /api/series?device=mercuril-01&hours=24` returns the
@@ -89,7 +90,8 @@ numbers).
 into the raw net (`raw_hooks`, tagged `rock7-unparsed`) with the decoded text
 and all the Rock7 delivery fields. Catch first, decode later; nothing that
 reaches the server is ever dropped. Device is resolved from `ROCK7_DEVICES`
-env (`imei=device,imei=device`), defaulting to `mercuril-01`. The endpoint
+env (`imei=device,imei=device`) or the `rock7_imei` set when provisioning.
+Unmapped identifiers are retained in the net and never attributed to another unit. The endpoint
 answers 200 once authorised even when parsing fails — Rock7 retries non-200s
 for 24 h and a bad payload won't improve with retrying.
 
@@ -120,13 +122,13 @@ what the fields mean later, then graduate the settled shape to `/api/ingest`.
 
 ---
 
-## 1. Get a device provisioned (once per unit, Andrew runs this)
+## 1. Provision a device with confirmed deployment metadata
 
 ```bash
 curl -X POST https://<host>/api/devices \
   -H "x-admin-key: $ADMIN_KEY" -H 'content-type: application/json' \
-  -d '{"device_id":"MRC-001","name":"Tabulam Causeway, Bruxner Hwy",
-       "lon":152.575,"lat":-28.885}'
+  -d '{"device_id":"bench-example","name":"Simulated bench example",
+       "lon":151.5,"lat":-32.5,"deployment":"bench","simulated":true}'
 ```
 
 Returns a `device_token`. **It is shown once.** That token goes in the firmware.
@@ -135,8 +137,22 @@ Units never carry `ADMIN_KEY` — that key also authorises deleting sensors and
 triggering the ETL, so it must not exist inside a box bolted to a public post.
 A leaked device token can only ever report readings for its own sensor.
 
-Re-running the command for an existing `device_id` re-issues the token and
-updates the position — that's how you move a unit or recover a lost token.
+Re-running the command preserves the token and updates location metadata; it does
+not return the existing credential. New units have NULL depth, battery and last
+observation until a device reports. The map labels the unobserved condition.
+
+For a real crossing, supply `deployment: "installed"`, install-day `lon` and `lat`,
+and a `location_note` recording their confirmation. Do not substitute a candidate
+site for an actual install position. Reprovisioning an installed unit requires the
+same explicit metadata. Otherwise provisioning defaults to a bench display pin,
+which cannot create road closures or affect routing. Device IDs starting `bench-`
+are always simulated. An existing simulated device cannot be relabelled as real.
+
+Optional `rock7_imei` records the unit’s 15-digit satellite identifier in the
+private database. Optional `report_interval_s` sets expected report cadence;
+3600 means hourly reports. Set it from the firmware configuration, not just the
+M2 sample spacing. Configure the Rock7 delivery URL as `/api/rock7` with the
+configured secret; `/api/raw` captures bytes but does not decode or project them.
 
 ## 2. Post readings
 
@@ -193,17 +209,24 @@ flooded crossing — the previous state holds. A false "flooded" annoys a driver
 a false "clear" kills one. So a dead radar, a lost lock, or a confidence
 collapse leaves the road shut until the device positively reports `dry`.
 
-**2. A partial payload never erases what we already knew.** Send only
-`batt_v` and the last known depth, velocity and D×V all survive. The stored
-reading records exactly what arrived; the sensor's current row holds last-known-good.
+**2. Missing measurements stay missing.** Omitted channels are NULL in the latest
+sample; earlier readings and closure-trigger evidence remain in history. Battery
+and optional diagnostic metadata retain their previous values when absent.
+An explicit legacy D×V ≥ 0.30 still closes even if `state` was omitted.
+
+The map projection is transactional and completes before 200. Late OPEN and
+same-time conflicting OPEN cannot reopen newer closures. A newer blind sample
+cannot suppress a late hazard after the last positive decision. Active closure
+evidence is available separately at `/api/sensor-closures`; government records
+and counts remain government-only.
 
 ## 3. Heartbeat even when nothing changes
 
-Every accepted post updates `last_seen`, including one that reports identical
-values. A unit silent for **15 minutes** is flagged `stale` in the API — that
+Every accepted post records contact; `last_seen` / `observed_at` follow the
+latest sample time, so replayed satellite packets cannot appear freshly measured. A unit silent for **15 minutes** is flagged `stale` in the API — that
 is how the map distinguishes *dry* from *dead*. On the dry-mode 6 h cadence
-from §4, expect to look stale between heartbeats; that's correct and expected
-for a bench unit, and worth revisiting once the real duty cycle is settled.
+from §4, configure `report_interval_s` so sample age between scheduled reports
+is presented as expected. Staleness never clears a closure.
 
 ## 4. Minimum viable ESP32 client
 

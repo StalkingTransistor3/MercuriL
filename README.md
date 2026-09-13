@@ -4,8 +4,8 @@ Live prototype for the MercuriL flood road-safety network (UNSW Peter Farrell Cu
 
 A Google-Maps-style web app (desktop + mobile) with one switch:
 
-- **Today** — the map as it exists: real routing, real government closure data, and no idea the causeway ahead is under water.
-- **With MercuriL** — the same map with the sensor network: flooded crossings detected in minutes, verified closures on the map, and the route quietly re-planned around the water.
+- **Today** — a comparison route on the real road network with sensor avoidance disabled. Government records remain visible; this does not reproduce another navigation app.
+- **With MercuriL** — instrument closures and labelled demonstration floods trigger avoidance routing. Satellite latency follows the unit’s configured report cadence.
 
 ## What's real vs simulated
 
@@ -14,7 +14,10 @@ A Google-Maps-style web app (desktop + mobile) with one switch:
 | Government closures (grey dots) | **Real** — the federal [Roadworks and Road Closures](https://catalogue.data.infrastructure.gov.au/dataset/harmonised-national-roadworks-and-road-closures) dataset (Dept of Infrastructure, CC-BY 4.0), NSW slice (~103k records), synced daily into Postgres |
 | Road network + routing | **Real** — OSM road graph via FOSSGIS Valhalla (`exclude_polygons` for flood avoidance), OSRM fallback |
 | Search | **Real** — Photon geocoding, AU-biased |
-| Sensors (green/red dots) | **Simulated** — hardware in prototyping; states are driven live from `/admin`, or from a real unit via `/api/ingest` (see `hardware/INGEST.md`) |
+| Installed device pins / red double-ring closures | **Real instrument reports** — provisioned `device_id`, `deployment=installed`, confirmed location note. Separate `sensor_closures` table and `/api/sensor-closures`; never mixed into government records |
+| Bench device pins | **Real hardware, bench only** — labelled display position, no road closure or routing effect; install coordinates remain unconfirmed |
+| Brass-outline pins / `bench-*` devices | **Simulated** — `/admin` drives unprovisioned pins; simulated telemetry devices stay labelled. Their floods affect demonstration routing and route warnings say so |
+| Telemetry console | Raw device class and measurements, with explicit real/bench/simulated/unverified identity and a separate server-derived closure flag |
 | Closure provenance (dot shading, feed counter, About panel figures) | **Real** — computed live from date fields in the same government records |
 
 ## Stack
@@ -24,8 +27,9 @@ Express + Neon Postgres · MapLibre GL + OpenFreeMap tiles (restyled toward the 
 ```
 lib/db.js       schema + pool + demo-sensor seed (closures/sensors/readings/inquiries/etl_runs)
 lib/etl.js      ArcGIS -> Postgres sync (boot-if-stale + daily)
-lib/routing.js  Valhalla/OSRM proxy, flood buffers, hazard detection
-server.js       API: /api/closures /api/closures/stats /api/sensors /api/devices
+lib/routing.js  Valhalla/OSRM proxy, flood buffers, verified avoidance geometry
+lib/sensor-state.js ordered projection, closure decisions and provenance
+server.js       API: /api/closures /api/closures/stats /api/sensor-closures /api/sensors /api/devices
                      /api/ingest /api/series /api/telemetry/devices /api/rock7
                      /api/route /api/geocode /api/etl/* /api/inquire
 public/         the app (index.html) + mission control (admin.html)
@@ -43,9 +47,36 @@ the device's class as a coloured band, battery below, reboots marked. See
 [`hardware/INGEST.md`](hardware/INGEST.md) for both wire contracts, and
 `node hardware/fake-telemetry.js` to drive a full flood cycle without hardware.
 
-Two rules the server enforces, both deliberate: an `unknown` reading never
-clears a flooded crossing (fails toward closed, never toward safe), and a
-partial payload never erases the last known reading.
+Only a newer positive OPEN (`dry` on the legacy contract) can reopen a closure,
+and D×V ≥ 0.30 m²/s overrides OPEN. UNCAL, NO_TARGET and low-D×V UNCLASSED
+reports hold the closure. Raw telemetry remains append-only. Projection completes
+before ingest acknowledges success; failure returns 500 so delivery can retry.
+Per-device row locks and observation/decision timestamps handle concurrent and
+late reports. An old OPEN cannot erase newer evidence, and a blind report does
+not suppress a delayed hazard after the last positive decision.
+
+Missing channels are NULL in the latest sample. Closure-trigger time, report ID,
+class, depth, velocity and D×V persist independently in `sensor_closures` until
+positive reopening; historical readings and the instrument record remain intact.
+The latest sample is never padded with old values presented as current readings.
+
+Provisioning defaults to **bench**. Field provisioning requires
+`deployment: "installed"` and a `location_note` describing confirmed coordinates.
+Use `report_interval_s` for expected transmission cadence (M2 `dt_s` is sample
+spacing, not proof of transmission cadence), and `rock7_imei` for explicit device
+mapping. Reprovisioning preserves the existing credential. Installed units cannot
+silently become bench units through an omitted field. Device-controlled pins cannot
+be flooded, cleared, dragged or deleted by the simulation controls.
+
+`stale` remains true once sample age exceeds 15 minutes. An hourly satellite sample
+58 minutes old is presented as awaiting its configured report, with age visible.
+A stale flooded unit stays excluded from routes; a stale clear unit is neutral and
+reports unknown present conditions. Bench hardware never excludes a public road.
+
+A successful HTTP routing response is checked against every flooded sensor within
+120 m before claiming avoidance. If avoidance fails, the baseline keeps its hazard
+warning. Cached geometry receives current sensor evidence without extra community
+routing calls. The UI shows an explicit warning if a new route request fails.
 
 ## The closure-provenance layer
 
@@ -60,6 +91,31 @@ that are scheduled roadworks ending in 2029. It appears to track the source
 system's own record lifecycle, it is undocumented in the payload, and a claim
 built on it would not survive one informed question. Dates are unambiguous;
 build the argument on those.
+
+## Pilot trigger and scientific limits
+
+The server’s single derived decision is closure at D×V ≥ 0.30 m²/s, including
+when the product computed from measured depth and velocity reaches the trigger.
+It does not derive OPEN or WARNING. The threshold is an application trigger,
+not a complete H1–H6 implementation or a guarantee about crossing conditions.
+[Smith, Modra, Tucker & Cox (2017), WRL TR 2017/07, Table ES-1](https://www.unsw.edu.au/content/dam/pdfs/engineering/civil-environmental/water-research-laboratory/publications/WRL-TR2017-07-Vehicle-Stability-Testing-for-Flood-Flows.pdf)
+discusses a small-passenger-vehicle product criterion of 0.3 alongside independent
+depth and velocity limits. This prototype does not implement all those limits.
+Do not describe a low product as permission to enter floodwater.
+
+## Verification
+
+`npm test` runs offline decision and display checks. `npm run test:integration`
+explicitly creates a temporary schema on the configured Neon database, runs the
+real Express handlers and SQL, then drops only that schema. It never writes test
+reports to public tables or `mercuril-01`. External routing responses are fixtures,
+so these tests verify avoidance requests, route geometry checks and UI behavior;
+they do not prove a particular crossing has a viable live detour.
+
+`node tests/integration.cjs --isolated-neon --browser` also checks desktop/mobile
+WebGL rendering and admin controls using the droplet’s existing Playwright install.
+Screenshots are saved outside this repository in `/tmp`. `node tests/live-routing.cjs`
+checks the real routing service with an in-memory obstacle and no database writes.
 
 ## Run
 

@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { getPool, initDb } = require('./lib/db');
 const { runEtl, scheduleEtl } = require('./lib/etl');
 const { route } = require('./lib/routing');
+const { DV_CLOSE, number: tnum, judgement, presentation, projectReport } = require('./lib/sensor-state');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,19 +73,18 @@ app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] })
 
 // ---------- helpers ----------
 
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
   if (!ADMIN_KEY || req.get('x-admin-key') !== ADMIN_KEY) {
+    if (req.path === '/api/devices' && req.method === 'POST') {
+      const kept = await keepInNet(req, 'provision-rejected:bad-admin-key', JSON.stringify(req.body), req.body);
+      return res.status(kept ? 401 : 500).json({ ok: false, error: 'Unauthorised', kept });
+    }
     return res.status(401).json({ ok: false, error: 'Unauthorised' });
   }
   next();
 }
 
-// A device is "stale" when we haven't heard from it inside two of its slowest
-// heartbeats. Simulated pins never go stale — nobody is claiming they're alive.
-const STALE_AFTER_MS = 15 * 60 * 1000;
-
 function sensorFeature(row, readings) {
-  const age = Date.now() - new Date(row.last_seen).getTime();
   return {
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [row.lon, row.lat] },
@@ -105,7 +105,14 @@ function sensorFeature(row, readings) {
       rise_rate_mm_min: row.rise_rate_mm_min,
       confidence: row.confidence,
       batt_v: row.batt_v,
-      stale: row.source === 'device' && age > STALE_AFTER_MS,
+      ...presentation(row),
+      deployment: row.device_id ? row.deployment : 'simulated',
+      location_note: row.location_note || null,
+      observed_at: row.observed_at,
+      telemetry_src: row.telemetry_src,
+      report_interval_s: row.report_interval_s,
+      class_derived: row.class_derived,
+      closure: row.closure || null,
       readings: readings || [],
     },
   };
@@ -171,6 +178,8 @@ app.get('/api/closures', async (req, res) => {
         geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
         properties: {
           uid: r.uid,
+          source: 'government',
+          simulated: false,
           category: r.category,
           type: r.type,
           status: r.status,
@@ -186,6 +195,20 @@ app.get('/api/closures', async (req, res) => {
   } catch (err) {
     console.error('closures failed', err.message);
     res.status(500).json({ ok: false, error: 'closures query failed' });
+  }
+});
+
+// Active instrument closures: separate from government records and their counts.
+app.get('/api/sensor-closures', async (_req, res) => {
+  try {
+    const { rows } = await getPool().query(`SELECT s.*, to_jsonb(c) AS closure
+      FROM sensors s JOIN sensor_closures c ON c.sensor_id=s.id AND c.reopened_at IS NULL
+      WHERE s.state='flooded' AND s.device_id IS NOT NULL
+        AND s.deployment='installed' AND NOT s.is_simulated AND s.device_id !~* '^bench-'`);
+    res.json({ type: 'FeatureCollection', features: rows.map((r) => sensorFeature(r)) });
+  } catch (err) {
+    console.error('sensor closures failed', err.message);
+    res.status(500).json({ ok: false, error: 'sensor closures query failed' });
   }
 });
 
@@ -230,7 +253,8 @@ app.get('/api/closures/stats', async (_req, res) => {
 app.get('/api/sensors', async (_req, res) => {
   try {
     const db = getPool();
-    const { rows } = await db.query('SELECT * FROM sensors ORDER BY id');
+    const { rows } = await db.query(`SELECT s.*, to_jsonb(c) AS closure FROM sensors s
+      LEFT JOIN sensor_closures c ON c.sensor_id=s.id AND c.reopened_at IS NULL ORDER BY s.id`);
     const readings = await db.query(
       `SELECT sensor_id, ts, depth_m, state FROM (
          SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY ts DESC) rn
@@ -277,6 +301,20 @@ app.patch('/api/sensors/:id', requireAdmin, async (req, res) => {
   const cur = await db.query('SELECT * FROM sensors WHERE id = $1', [id]);
   if (!cur.rows.length) return res.status(404).json({ ok: false, error: 'not found' });
   const s = cur.rows[0];
+  if (s.device_id && (state !== undefined || depth_m !== undefined)) {
+    const kept = await keepInNet(req, 'sensor-edit-rejected:device-controlled', JSON.stringify(req.body), req.body);
+    return res.status(409).json({ ok: false, error: 'Device readings can only change through ingest', kept });
+  }
+  if (s.device_id) {
+    // Provisioning owns field coordinates. Metadata edits cannot race ingest
+    // and write an old state/depth back over a newly closed crossing.
+    if (lon !== undefined || lat !== undefined) {
+      const kept = await keepInNet(req, 'sensor-edit-rejected:use-provisioning', JSON.stringify(req.body), req.body);
+      return res.status(409).json({ ok: false, error: 'Use device provisioning with confirmed location metadata', kept });
+    }
+    await db.query('UPDATE sensors SET name=$2 WHERE id=$1', [id, name === undefined ? s.name : String(name).trim().slice(0, 120)]);
+    return res.json({ ok: true, sensor_id: id });
+  }
   const next = {
     name: name !== undefined ? String(name).trim().slice(0, 120) : s.name,
     lon: typeof lon === 'number' ? lon : s.lon,
@@ -302,60 +340,71 @@ app.patch('/api/sensors/:id', requireAdmin, async (req, res) => {
 });
 
 app.delete('/api/sensors/:id', requireAdmin, async (req, res) => {
-  await getPool().query('DELETE FROM sensors WHERE id = $1', [Number(req.params.id)]);
+  const result = await getPool().query('DELETE FROM sensors WHERE id = $1 AND device_id IS NULL RETURNING id', [Number(req.params.id)]);
+  if (!result.rowCount) return res.status(409).json({ ok: false, error: 'Only simulated map pins can be deleted here' });
   res.json({ ok: true });
 });
 
 // ---------- device ingest (real hardware) ----------
 //
 // Provision a physical unit. Returns the token ONCE — it goes into the
-// firmware and is not retrievable afterwards. Devices get their own token so
+// firmware and is not retrievable afterwards. Reprovisioning keeps its token.
+// Devices get their own token so
 // no unit ever carries ADMIN_KEY, which also authorises DELETE and ETL.
 app.post('/api/devices', requireAdmin, async (req, res) => {
-  const { device_id, name, lon, lat } = req.body || {};
-  if (!device_id || !name || typeof lon !== 'number' || typeof lat !== 'number') {
-    return res.status(400).json({ ok: false, error: 'device_id, name, lon, lat required' });
+  const { device_id, name, lon, lat, deployment = 'bench', location_note, simulated = false, report_interval_s, rock7_imei } = req.body || {};
+  if (typeof device_id !== 'string' || !device_id.trim() || typeof name !== 'string' || !name.trim()
+      || !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90
+      || !['bench','installed'].includes(deployment) || typeof simulated !== 'boolean'
+      || (deployment === 'installed' && (typeof location_note !== 'string' || !location_note.trim()))
+      || (rock7_imei != null && !/^\d{15}$/.test(rock7_imei))
+      || (report_interval_s != null && (!Number.isInteger(report_interval_s) || report_interval_s < 1 || report_interval_s > 86400))) {
+    const kept = await keepInNet(req, 'provision-rejected:bad-shape', JSON.stringify(req.body), req.body);
+    return res.status(400).json({ ok: false, error: 'Valid device_id, name, lon, lat, deployment and confirmed location_note required; cadence is seconds', kept });
   }
   const token = crypto.randomBytes(24).toString('hex');
   try {
+    const existing = await getPool().query('SELECT deployment FROM sensors WHERE device_id=$1', [device_id.trim().slice(0,64)]);
+    if (existing.rows[0]?.deployment === 'installed' && req.body.deployment !== 'installed') {
+      const kept = await keepInNet(req, 'provision-rejected:field-location-required', JSON.stringify(req.body), req.body);
+      return res.status(409).json({ ok: false, error: 'An installed unit requires explicit installed deployment and confirmed location metadata', kept });
+    }
     const { rows } = await getPool().query(
-      `INSERT INTO sensors (name, lon, lat, device_id, device_token, source, state, depth_m)
-       VALUES ($1,$2,$3,$4,$5,'device','clear',0)
+      `INSERT INTO sensors (name, lon, lat, device_id, device_token, source, state, depth_m, battery_pct, last_seen, deployment, location_note, is_simulated, report_interval_s, rock7_imei)
+       VALUES ($1,$2,$3,$4,$5,'device','clear',NULL,NULL,NULL,$6,$7,$8,$9,$10)
        ON CONFLICT (device_id) WHERE device_id IS NOT NULL
        DO UPDATE SET name = EXCLUDED.name, lon = EXCLUDED.lon, lat = EXCLUDED.lat,
-                     device_token = EXCLUDED.device_token, source = 'device'
-       RETURNING id, device_id`,
-      [String(name).trim().slice(0, 120), lon, lat, String(device_id).trim().slice(0, 64), token]
+                     source = 'device', deployment = EXCLUDED.deployment, location_note = EXCLUDED.location_note,
+                     report_interval_s = COALESCE(EXCLUDED.report_interval_s,sensors.report_interval_s),
+                     rock7_imei = COALESCE(EXCLUDED.rock7_imei,sensors.rock7_imei)
+       RETURNING id, device_id, device_token=$5 AS created`,
+      [String(name).trim().slice(0, 120), lon, lat, String(device_id).trim().slice(0, 64), token,
+       deployment, String(location_note || 'Bench display position; install location unconfirmed').slice(0, 240),
+       simulated || /^bench-/i.test(device_id.trim()), report_interval_s || null, rock7_imei || null]
     );
-    res.json({ ok: true, sensor_id: rows[0].id, device_id: rows[0].device_id, device_token: token });
+    res.json({ ok: true, sensor_id: rows[0].id, device_id: rows[0].device_id, ...(rows[0].created ? { device_token: token } : {}) });
   } catch (err) {
     console.error('device provision failed', err.message);
     res.status(500).json({ ok: false, error: 'provisioning failed' });
   }
 });
 
-// The device's four-state view projected onto the two states the map draws.
-// Fails toward flooded, never toward clear: 'unknown' holds the previous
-// state rather than reporting a road safe that nobody can currently see.
-// A false "flooded" annoys a driver; a false "clear" kills one.
-function mapState(deviceState, prevState) {
-  if (deviceState === 'dry') return 'clear';
-  if (deviceState === 'wet' || deviceState === 'hazard') return 'flooded';
-  return prevState; // unknown, or anything unrecognised
-}
-
 const ingestLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 240, // a fleet in hazard mode reports every 10 s
   standardHeaders: true,
   legacyHeaders: false,
+  handler: async (req, res) => {
+    const text = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body);
+    const kept = await keepInNet(req, 'ingest-rejected:rate-limit', text, Buffer.isBuffer(req.body) ? null : req.body);
+    res.status(kept ? 429 : 500).json({ ok: false, error: 'Report rate limit exceeded', kept });
+  },
 });
 
 // ---------- v0.5 firmware telemetry ----------
 
 const TELEMETRY_CLASSES = new Set(['OPEN', 'WARNING', 'CLOSED', 'UNCAL', 'NO_TARGET']);
 
-const tnum = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 // Rejection is not permission to forget. Any payload the typed endpoints
 // turn away still gets remembered in raw_hooks, tagged with why, so a
@@ -376,44 +425,9 @@ async function keepInNet(req, tag, text, json) {
   }
 }
 
-// Project a telemetry report onto the map's sensors table, if a pin has been
-// provisioned with this device_id (POST /api/devices). No pin = telemetry is
-// still recorded, the map just doesn't know about the unit yet. Runs after
-// the 200 has gone back to the device — ingest must return fast.
-//
-// Same doctrine as the legacy path: fails toward closed, never toward safe.
-// WARNING shows flooded (the pilot's own scope is warn/closed LEDs only), and
-// UNCAL/NO_TARGET hold the previous state — a blind sensor doesn't clear a road.
-async function projectTelemetry(device, cls, depth, vel, dv, batV, batPct) {
-  const db = getPool();
-  const state =
-    cls === 'OPEN' ? 'clear' : cls === 'WARNING' || cls === 'CLOSED' ? 'flooded' : null;
-  const { rows } = await db.query(
-    `UPDATE sensors SET
-       state        = COALESCE($1, state),
-       depth_m      = COALESCE($2, depth_m),
-       device_state = $3,
-       velocity_ms  = COALESCE($4, velocity_ms),
-       dv_product   = COALESCE($5, dv_product),
-       batt_v       = COALESCE($6, batt_v),
-       battery_pct  = COALESCE($7, battery_pct),
-       source = 'device', last_seen = now()
-     WHERE device_id = $8
-     RETURNING id, state, depth_m`,
-    [state, depth, cls, vel, dv, batV, batPct, device]
-  );
-  if (rows.length && state !== null) {
-    await db.query(
-      `INSERT INTO sensor_readings (sensor_id, depth_m, state, velocity_ms, dv_product, device_state)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [rows[0].id, depth ?? rows[0].depth_m ?? 0, rows[0].state, vel, dv, cls]
-    );
-  }
-}
-
-// Store one v0.5-shaped record and kick the map projection. Shared by the
+// Store one v0.5-shaped record and await its map projection. Shared by the
 // Wi-Fi and satellite paths — same table, same plot.
-async function storeTelemetry({ device, src, fw, uptime_s, cls, depth, vel, dv, range, dry, echo_pct, batV, batPct, raw, received_at }) {
+async function storeTelemetry({ device, src, fw, uptime_s, cls, depth, vel, dv, range, dry, echo_pct, batV, batPct, raw, received_at, interval_s }) {
   // The firmware reports 0.0 for depth/vel/dv when it has no target or no
   // calibration. Store NULL — a zero here would plot as "confidently dry".
   const measured = cls !== 'UNCAL' && cls !== 'NO_TARGET';
@@ -428,9 +442,9 @@ async function storeTelemetry({ device, src, fw, uptime_s, cls, depth, vel, dv, 
     [device, received_at || null, src, fw, tnum(uptime_s), cls, d, v, p,
      tnum(range), tnum(dry), tnum(echo_pct), tnum(batV), tnum(batPct), raw]
   );
-  projectTelemetry(device, cls, d, v, p, tnum(batV), tnum(batPct)).catch((err) =>
-    console.error('telemetry map projection failed', err.message)
-  );
+  await projectReport(getPool(), { device, cls, depth: d, vel: v, dv: p,
+    batV: tnum(batV), batPct: tnum(batPct), src, interval_s,
+    ts: rows[0].received_at, telemetry_id: rows[0].id, raw });
   return rows[0];
 }
 
@@ -483,7 +497,7 @@ app.get('/api/series', async (req, res) => {
         LIMIT 20000`,
       [device, hours]
     );
-    res.json(rows);
+    res.json(rows.map((r) => ({ ...r, class_derived: judgement(r.class, r.depth, r.vel, r.dv).class_derived })));
   } catch (err) {
     console.error('series failed', err.message);
     res.status(500).json({ ok: false, error: 'series query failed' });
@@ -494,10 +508,12 @@ app.get('/api/series', async (req, res) => {
 app.get('/api/telemetry/devices', async (_req, res) => {
   try {
     const { rows } = await getPool().query(
-      `SELECT DISTINCT ON (device) device, received_at, src, class, bat_pct AS "batPct"
-         FROM telemetry ORDER BY device, received_at DESC`
+      `SELECT DISTINCT ON (t.device) t.device, t.received_at, t.src, t.class, t.bat_pct AS "batPct",
+              s.device_id, s.deployment, s.is_simulated, s.report_interval_s
+         FROM telemetry t LEFT JOIN sensors s ON s.device_id=t.device ORDER BY t.device, t.received_at DESC`
     );
-    res.json(rows);
+    res.json(rows.map((r) => ({ ...r, provenance: /^bench-|^probe$/i.test(r.device) || r.is_simulated
+      ? 'simulated' : !r.device_id ? 'unverified' : r.deployment === 'installed' ? 'real_sensor' : 'bench_unit' })));
   } catch (err) {
     console.error('telemetry devices failed', err.message);
     res.status(500).json({ ok: false, error: 'query failed' });
@@ -593,21 +609,27 @@ const ROCK7_DEVICES = Object.fromEntries(
     .filter((kv) => kv.length === 2 && kv[0] && kv[1])
 );
 
-function rock7Device(b) {
+async function rock7Device(b) {
   const hit = ROCK7_DEVICES[String(b.imei || '')] || ROCK7_DEVICES[String(b.serial || '')];
-  if (!hit) console.log(`rock7: imei ${b.imei || '?'} not in ROCK7_DEVICES, defaulting to mercuril-01`);
-  return hit || 'mercuril-01';
+  if (hit) return hit;
+  const { rows } = await getPool().query('SELECT device_id FROM sensors WHERE rock7_imei=$1', [String(b.imei || '')]);
+  return rows[0]?.device_id || null;
 }
 
 app.post('/api/rock7', ingestLimiter, async (req, res) => {
   if (ROCK7_SECRET && req.query.secret !== ROCK7_SECRET) {
-    return res.status(401).json({ ok: false, error: 'bad secret' });
+    const kept = await keepInNet(req, 'rock7-rejected:bad-secret', JSON.stringify(req.body), req.body);
+    return res.status(kept ? 401 : 500).json({ ok: false, error: 'bad secret', kept });
   }
   const b = req.body || {};
   try {
     const text = Buffer.from(String(b.data || ''), 'hex').toString('utf8').trim();
     const f = text.split(',');
-    const device = rock7Device(b);
+    const device = await rock7Device(b);
+    if (!device) {
+      const kept = await keepInNet(req, 'rock7-rejected:unmapped-device', JSON.stringify(b), b);
+      return res.status(kept ? 200 : 500).json({ ok: !!kept, kept: 'raw', id: kept, reason: 'unmapped device' });
+    }
     const meta = {
       csv: text, imei: b.imei || null, serial: b.serial || null,
       momsn: b.momsn || null, transmit_time: b.transmit_time || null,
@@ -634,7 +656,7 @@ app.post('/api/rock7', ingestLimiter, async (req, res) => {
           const dv = depth !== null && vel !== null ? +(depth * vel).toFixed(4) : null;
           const cls =
             depth === null && vel === null ? 'NO_TARGET'
-            : dv !== null && dv >= 0.3 ? 'CLOSED'
+            : dv !== null && dv >= DV_CLOSE ? 'CLOSED'
             : 'UNCLASSED';
           const newest = i === n - 1;
           const row = await storeTelemetry({
@@ -678,7 +700,7 @@ app.post('/api/rock7', ingestLimiter, async (req, res) => {
       `INSERT INTO raw_hooks (content_type, authed, ip, headers, bytes, body_text, body_json)
        VALUES ('rock7-unparsed', $1, $2, $3, $4, $5, $6) RETURNING id, received_at`,
       [Boolean(ROCK7_SECRET), req.ip, {}, Buffer.byteLength(text), text,
-       JSON.stringify({ ...meta, fields: { ...b, data: undefined } })]
+       JSON.stringify({ ...meta, fields: b })]
     );
     console.log(`rock7: unparsed payload kept in raw net (id ${rows[0].id}):`,
       JSON.stringify(text.slice(0, 80)));
@@ -700,7 +722,8 @@ app.post('/api/ingest', ingestLimiter, async (req, res) => {
   const token = req.get('x-device-token');
   const deviceId = body.sensor_id || body.device_id;
   if (!token || !deviceId) {
-    return res.status(401).json({ ok: false, error: 'x-device-token header and sensor_id required' });
+    const kept = await keepInNet(req, 'ingest-rejected:missing-device-token', JSON.stringify(body), body);
+    return res.status(kept ? 401 : 500).json({ ok: false, error: 'x-device-token header and sensor_id required', kept });
   }
   try {
     const db = getPool();
@@ -708,71 +731,26 @@ app.post('/api/ingest', ingestLimiter, async (req, res) => {
       'SELECT * FROM sensors WHERE device_id = $1 AND device_token = $2',
       [String(deviceId).slice(0, 64), token]
     );
-    if (!found.length) return res.status(401).json({ ok: false, error: 'unknown device or bad token' });
-    const s = found[0];
-
-    // Depth in metres is what the map reads; firmware talks millimetres.
-    const depth_m =
-      typeof body.depth_mm === 'number' ? body.depth_mm / 1000
-      : typeof body.depth_m === 'number' ? body.depth_m
-      : s.depth_m;
-
-    const deviceState = ['dry', 'wet', 'hazard', 'unknown'].includes(body.state)
-      ? body.state
-      : 'unknown';
-    let state = mapState(deviceState, s.state);
-
-    // Australian Rainfall & Runoff hazard: the depth x velocity product, not
-    // depth alone. A hazard class or a D*V over the vehicle-stability
-    // threshold closes the road regardless of what the state field says.
-    const dv = typeof body.dv_product === 'number' ? body.dv_product : null;
-    const hazardClass = typeof body.hazard_class === 'string' ? body.hazard_class.slice(0, 8) : null;
-    if ((dv !== null && dv >= 0.3) || (hazardClass && /^H[2-6]$/i.test(hazardClass))) state = 'flooded';
-
-    const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-    // Device-supplied timestamp wins so a unit that buffered while offline
-    // backfills at the time it actually measured, not the time it uploaded.
+    if (!found.length) {
+      const kept = await keepInNet(req, 'ingest-rejected:unknown-device', JSON.stringify(body), body);
+      return res.status(kept ? 401 : 500).json({ ok: false, error: 'unknown device or bad token', kept });
+    }
+    const deviceState = ['dry', 'wet', 'hazard', 'unknown'].includes(body.state) ? body.state : 'unknown';
+    const depth = tnum(body.depth_mm) !== null ? body.depth_mm / 1000 : tnum(body.depth_m);
+    const vel = tnum(body.velocity_ms);
+    const dv = tnum(body.dv_product);
+    const cls = /^H[2-6]$/i.test(body.hazard_class || '') ? 'hazard' : deviceState;
     const ts = body.ts && !Number.isNaN(Date.parse(body.ts)) ? new Date(body.ts) : new Date();
-    const batt_v = num(body.batt_v);
-
-    // COALESCE on every optional field: a partial payload (a battery-only
-    // heartbeat, a firmware build that hasn't got velocity working yet) must
-    // never wipe the last known reading. The reading row below records exactly
-    // what arrived, nulls and all — this row is "last known good".
-    await db.query(
-      `UPDATE sensors SET
-         state = $1, depth_m = $2, device_state = $3,
-         velocity_ms      = COALESCE($4,  velocity_ms),
-         dv_product       = COALESCE($5,  dv_product),
-         hazard_class     = COALESCE($6,  hazard_class),
-         rise_rate_mm_min = COALESCE($7,  rise_rate_mm_min),
-         confidence       = COALESCE($8,  confidence),
-         batt_v           = COALESCE($9,  batt_v),
-         temp_c           = COALESCE($10, temp_c),
-         tilt_deg         = COALESCE($11, tilt_deg),
-         battery_pct      = COALESCE($12, battery_pct),
-         source = 'device',
-         last_seen = now()
-       WHERE id = $13`,
-      [
-        state, depth_m, deviceState, num(body.velocity_ms), dv, hazardClass,
-        num(body.rise_rate_mm_min), num(body.confidence), batt_v,
-        num(body.temp_c), num(body.tilt_deg),
-        // 2x18650 in series: ~6.0 V empty, ~8.4 V full. Rough, and labelled so.
-        batt_v === null ? null : Math.max(0, Math.min(100, Math.round(((batt_v - 6.0) / 2.4) * 100))),
-        s.id,
-      ]
-    );
-    await db.query(
-      `INSERT INTO sensor_readings
-         (sensor_id, ts, depth_m, state, velocity_ms, dv_product, confidence, device_state, raw)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [s.id, ts, depth_m, state, num(body.velocity_ms), dv, num(body.confidence), deviceState, body]
-    );
-    res.json({ ok: true, sensor_id: s.id, state, depth_m });
+    const result = await projectReport(db, {
+      device: found[0].device_id, cls, depth, vel, dv, ts, src: 'legacy', raw: body,
+      batV: tnum(body.batt_v), batPct: tnum(body.batt_v) === null ? null
+        : Math.max(0, Math.min(100, Math.round(((body.batt_v - 6.0) / 2.4) * 100))), legacy: body,
+    });
+    res.json({ ok: true, ...result });
   } catch (err) {
     console.error('ingest failed', err.message);
-    res.status(500).json({ ok: false, error: 'ingest failed' });
+    const kept = await keepInNet(req, 'ingest-rejected:storage-failure', JSON.stringify(body), body);
+    res.status(500).json({ ok: false, error: 'ingest failed', kept });
   }
 });
 
@@ -794,9 +772,12 @@ app.get('/api/route', routeLimiter, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'from=lon,lat & to=lon,lat required' });
     }
     const { rows: flooded } = await getPool().query(
-      `SELECT id, name, lon, lat, depth_m, last_seen FROM sensors WHERE state = 'flooded'`
+      `SELECT s.*, to_jsonb(c) AS closure FROM sensors s
+       LEFT JOIN sensor_closures c ON c.sensor_id=s.id AND c.reopened_at IS NULL
+       WHERE s.state='flooded' AND (s.device_id IS NULL OR s.is_simulated OR s.device_id ~* '^bench-' OR s.deployment='installed')`
     );
-    const result = await route(from, to, mode, flooded);
+    const hazards = flooded.map((r) => ({ ...sensorFeature(r).properties, lon: r.lon, lat: r.lat }));
+    const result = await route(from, to, mode, hazards);
     res.json({ ok: true, ...result });
   } catch (err) {
     console.error('route failed', err.message);
@@ -920,7 +901,7 @@ app.use(async (err, req, res, next) => {
 
 // ---------- boot ----------
 
-(async () => {
+if (require.main === module) (async () => {
   try {
     await initDb();
     scheduleEtl();
@@ -929,3 +910,5 @@ app.use(async (err, req, res, next) => {
   }
   app.listen(PORT, () => console.log(`MercuriL prototype listening on ${PORT}`));
 })();
+
+module.exports = { app };

@@ -1,4 +1,4 @@
-    /* global maplibregl, googleishStyle */
+    /* global maplibregl, googleishStyle, sensorDisplay */
     (async () => {
       const $ = (id) => document.getElementById(id);
 
@@ -36,7 +36,7 @@
 
       function markerEl(state) {
         const el = document.createElement('div');
-        el.style.cssText = `width:18px;height:18px;border-radius:50%;border:3px solid #f3efe8;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:grab;background:${state === 'flooded' ? '#d74242' : '#5dac8f'}`;
+        el.style.cssText = `width:18px;height:18px;border-radius:50%;border:3px solid #f3efe8;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:grab;background:${state === 'flooded' ? '#d74242' : '#7d8899'}`;
         return el;
       }
 
@@ -56,7 +56,7 @@
         for (const s of sensors) {
           let m = markers.get(s.id);
           if (!m) {
-            m = new maplibregl.Marker({ element: markerEl(s.state), draggable: true })
+            m = new maplibregl.Marker({ element: markerEl(s.state), draggable: !s.device_id })
               .setLngLat([s.lon, s.lat])
               .addTo(map);
             m.on('dragend', async () => {
@@ -68,7 +68,7 @@
             markers.set(s.id, m);
           } else {
             m.setLngLat([s.lon, s.lat]);
-            m.getElement().style.background = s.state === 'flooded' ? '#d74242' : '#5dac8f';
+            m.getElement().style.background = s.state === 'flooded' ? '#d74242' : '#7d8899';
           }
         }
         for (const [id, m] of markers) if (!sensors.find((s) => s.id === id)) { m.remove(); markers.delete(id); }
@@ -79,16 +79,16 @@
           .map(
             (s) => `<div class="sensor">
           <div class="s-head">
-            <span class="s-dot" style="background:${s.state === 'flooded' ? '#d74242' : '#5dac8f'}"></span>
-            <span class="s-name">${s.name}</span>
-            <button class="s-del" data-del="${s.id}" title="Delete">✕</button>
+            <span class="s-dot" style="background:${s.state === 'flooded' ? '#d74242' : '#7d8899'}"></span>
+            <span class="s-name">${sensorDisplay.esc(s.name)}</span>
+            ${!s.device_id ? `<button class="s-del" data-del="${s.id}" title="Delete">✕</button>` : ''}
           </div>
-          <div class="s-controls">
-            <button class="s-toggle ${s.state}" data-toggle="${s.id}">${s.state === 'flooded' ? 'Set CLEAR' : 'FLOOD it'}</button>
+          ${!s.device_id ? `<div class="s-controls">
+            <button class="s-toggle ${s.state}" data-toggle="${s.id}">${s.state === 'flooded' ? 'Clear simulation' : 'FLOOD it'}</button>
             <input class="s-depth" type="range" min="0" max="2" step="0.01" value="${s.depth_m}" data-depth="${s.id}">
             <span class="s-depthval">${Number(s.depth_m).toFixed(2)} m</span>
-          </div>
-          <div class="s-meta">battery ${s.battery_pct}% · last seen ${new Date(s.last_seen).toLocaleTimeString()}</div>
+          </div>` : `<div class="s-meta">Device-controlled · ${sensorDisplay.esc(s.device_state || 'no report')} · ${sensorDisplay.metric(s.depth_m, 'm')}</div>`}
+          <div class="s-meta">${sensorDisplay.label(s)} · ${sensorDisplay.esc(sensorDisplay.freshness(s))}</div>
         </div>`
           )
           .join('');

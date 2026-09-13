@@ -7,6 +7,8 @@
     "node": ">=20"
   },
   "scripts": {
+    "test": "node --test tests/sensor-state.test.cjs",
+    "test:integration": "node tests/integration.cjs --isolated-neon",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "postinstall": "mkdir -p public/vendor && cp node_modules/maplibre-gl/dist/maplibre-gl.js node_modules/maplibre-gl/dist/maplibre-gl.css public/vendor/"

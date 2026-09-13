@@ -1,0 +1,250 @@
+// Opt-in: uses a fresh, isolated schema, never public tables or real devices.
+// node tests/integration.cjs --isolated-neon [--browser]
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+if (!process.argv.includes('--isolated-neon')) throw new Error('Pass --isolated-neon to create and clean up a temporary test schema');
+require('../lib/env').loadEnv();
+const { Pool } = require('pg');
+const { initDb } = require('../lib/db');
+const schema = `bench_mercuril_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+// Neon pooler rejects session startup search_path. Use its direct endpoint so
+// the isolated schema is enforced on every test connection, including locks.
+const testUrl = new URL(process.env.DATABASE_URL);
+if (testUrl.hostname.endsWith('.neon.tech')) testUrl.hostname = testUrl.hostname.replace('-pooler.', '.');
+const config = { connectionString: testUrl.toString(), ssl: { rejectUnauthorized: false }, max: 2 };
+const control = new Pool(config);
+const db = new Pool({ ...config, options: `-c search_path=${schema}` });
+require.cache[require.resolve('../lib/db')].exports = { getPool: () => db, initDb: () => initDb(db) };
+process.env.ADMIN_KEY = crypto.randomBytes(20).toString('hex');
+process.env.DEVICE_TOKEN = crypto.randomBytes(20).toString('hex');
+process.env.ROCK7_SECRET = crypto.randomBytes(20).toString('hex');
+process.env.ROCK7_DEVICES = '';
+const nativeFetch = global.fetch;
+const baseline = [[151.7, -32.4], [151.8, -32.4]];
+const detour = [[151.7, -32.4], [151.7, -32.39], [151.8, -32.39], [151.8, -32.4]];
+let ineffective = false;
+let routingCalls = 0;
+function polyline(coords) {
+  let out = '', prev = [0, 0];
+  for (const [lon, lat] of coords) for (const [i, value] of [lat, lon].entries()) {
+    const current = Math.round(value * 1e6), delta = current - prev[i];
+    prev[i] = current;
+    let n = delta < 0 ? ~(delta << 1) : delta << 1;
+    while (n >= 32) { out += String.fromCharCode((32 | (n & 31)) + 63); n >>>= 5; }
+    out += String.fromCharCode(n + 63);
+  }
+  return out;
+}
+global.fetch = async (url, options) => {
+  if (String(url).startsWith('https://valhalla1.openstreetmap.de/route')) {
+    routingCalls++;
+    const avoiding = !!JSON.parse(options.body).exclude_polygons?.length;
+    return Response.json({ trip: { summary: { length: avoiding ? 12 : 10, time: avoiding ? 720 : 600 },
+      legs: [{ shape: polyline(avoiding && !ineffective ? detour : baseline) }] } });
+  }
+  if (/^https?:/.test(String(url)) && !String(url).startsWith('http://127.0.0.1:')) throw new Error('Unexpected external request in integration test');
+  return nativeFetch(url, options);
+};
+let server, base, browser, checks = 0;
+async function check(name, fn) { await fn(); checks++; console.log(`PASS ${name}`); }
+async function api(path, body, auth = 'admin', method) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth === 'admin') headers['x-admin-key'] = process.env.ADMIN_KEY;
+  if (auth === 'device') headers.authorization = `Bearer ${process.env.DEVICE_TOKEN}`;
+  if (typeof auth === 'object') Object.assign(headers, auth);
+  const res = await nativeFetch(base + path, { method: method || (body ? 'POST' : 'GET'), headers, body: body ? JSON.stringify(body) : undefined });
+  return { status: res.status, data: await res.json() };
+}
+const wifi = (cls, extra = {}) => api('/api/ingest', { device: 'fixture-field', class: cls, depth: .4, vel: 1, dv: .4, ...extra }, 'device');
+const sensors = async () => (await api('/api/sensors')).data.features;
+const field = async () => (await sensors()).find((f) => f.properties.device_id === 'fixture-field').properties;
+const closures = async () => (await api('/api/sensor-closures')).data.features;
+const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-32.4&mode=${mode}${suffix}`);
+(async () => {
+  try {
+    await control.query(`CREATE SCHEMA ${schema}`);
+    await initDb(db);
+    const { app } = require('../server');
+    server = app.listen(0, '127.0.0.1');
+    await new Promise((resolve) => server.on('listening', resolve));
+    base = `http://127.0.0.1:${server.address().port}`;
+    let id, token, trigger;
+    await check('provisioning is unobserved; repeat preserves credentials', async () => {
+      const body = { device_id: 'fixture-field', name: 'ISOLATED TEST crossing', lon: 151.75, lat: -32.4,
+        deployment: 'installed', location_note: 'Isolated automated test fixture', rock7_imei: '000000000000001', report_interval_s: 3600 };
+      const r = await api('/api/devices', body);
+      assert.equal(r.status, 200); id = r.data.sensor_id; token = r.data.device_token;
+      const p = await field(); assert.equal(p.reporting, 'unobserved'); assert.equal(p.depth_m, null); assert.equal(p.battery_pct, null);
+      assert.equal((await api('/api/devices', body)).data.device_token, undefined);
+      assert.equal((await db.query('SELECT device_token FROM sensors WHERE id=$1', [id])).rows[0].device_token, token);
+    });
+    await check('CLOSED is acknowledged only after pin and closure evidence are stored', async () => {
+      assert.equal((await wifi('CLOSED')).status, 200);
+      assert.equal((await field()).state, 'flooded');
+      const c = await closures(); assert.equal(c.length, 1); trigger = c[0].properties.closure;
+      assert.equal(trigger.dv_product, .4); assert.ok(trigger.telemetry_id);
+      assert.equal((await db.query('SELECT count(*)::int n FROM closures')).rows[0].n, 0);
+    });
+    await check('MercuriL detours; Today preserves baseline and hazard provenance', async () => {
+      const today = (await route('today')).data, merc = (await route('mercuril')).data;
+      assert.deepEqual(today.coords, baseline); assert.equal(today.hazards[0].provenance, 'real_sensor');
+      assert.deepEqual(merc.coords, detour); assert.equal(merc.avoided.length, 1);
+    });
+    await check('blind reports retain closure trigger and never fabricate zero', async () => {
+      for (const cls of ['NO_TARGET', 'UNCAL']) assert.equal((await wifi(cls, { depth: 0, vel: 0, dv: 0 })).status, 200);
+      const p = await field(); assert.equal(p.state, 'flooded'); assert.equal(p.depth_m, null);
+      assert.deepEqual(p.closure, trigger);
+      const r = (await db.query('SELECT depth_m FROM sensor_readings WHERE sensor_id=$1 ORDER BY id DESC LIMIT 1', [id])).rows[0];
+      assert.equal(r.depth_m, null);
+      const before = routingCalls;
+      assert.equal((await route('mercuril')).data.avoided[0].depth_m, null);
+      assert.equal(routingCalls, before);
+    });
+    await check('old and equal-time OPEN cannot clear a closure; newer OPEN reopens', async () => {
+      const p = await field();
+      for (const ts of [trigger.detected_at, p.observed_at]) {
+        const r = await api('/api/ingest', { sensor_id: 'fixture-field', state: 'dry', depth_mm: 0, ts }, { 'x-device-token': token });
+        assert.equal(r.status, 200); assert.equal((await field()).state, 'flooded');
+      }
+      assert.equal((await wifi('OPEN', { depth: 0, vel: 0, dv: 0 })).status, 200);
+      assert.equal((await field()).state, 'clear'); assert.equal((await closures()).length, 0);
+      assert.deepEqual((await route('mercuril')).data.coords, baseline);
+    });
+    await check('D×V override applies to Wi-Fi OPEN and measured product', async () => {
+      await wifi('OPEN', { depth: .3, vel: 1, dv: 0 });
+      const p = await field(); assert.equal(p.state, 'flooded'); assert.equal(p.class_derived, true);
+      assert.equal(p.closure.dv_product, .3);
+      const r = (await api('/api/series?device=fixture-field')).data.at(-1);
+      assert.equal(r.class, 'OPEN'); assert.equal(r.class_derived, true);
+    });
+    await check('real device edits are rejected; simulated pins remain editable', async () => {
+      assert.equal((await api(`/api/sensors/${id}`, { state: 'clear', depth_m: 0 }, 'admin', 'PATCH')).status, 409);
+      assert.equal((await api(`/api/sensors/${id}`, { lon: 1 }, 'admin', 'PATCH')).status, 409);
+      assert.equal((await api(`/api/sensors/${id}`, undefined, 'admin', 'DELETE')).status, 409);
+      const sim = (await sensors()).find((f) => !f.properties.device_id);
+      assert.equal((await api(`/api/sensors/${sim.properties.id}`, { state: 'flooded' }, 'admin', 'PATCH')).status, 200);
+      assert.equal((await closures()).length, 1);
+      assert.equal((await api('/api/devices', { device_id: 'fixture-field', name: 'ambiguous move', lon: 1, lat: 1 })).status, 409);
+      assert.equal((await field()).deployment, 'installed');
+    });
+    await check('unmapped satellite reports are retained without polluting a real unit', async () => {
+      const r = await api(`/api/rock7?secret=${process.env.ROCK7_SECRET}`, { imei: '000000000000002', data: Buffer.from('M2,1,1200,70,100,1,3600,0,0').toString('hex') });
+      assert.equal(r.status, 200); assert.equal(r.data.reason, 'unmapped device');
+      assert.equal((await db.query("SELECT count(*)::int n FROM telemetry WHERE device='mercuril-01'")).rows[0].n, 0);
+      assert.equal((await field()).state, 'flooded');
+    });
+    await check('satellite M2 is ordered; low unclassed sample holds; M1 threshold overrides OPEN', async () => {
+      const sat = (csv, date) => api(`/api/rock7?secret=${process.env.ROCK7_SECRET}`, {
+        imei: '000000000000001', transmit_time: date.toISOString().slice(2, 19).replace('T', ' '), data: Buffer.from(csv).toString('hex') });
+      // Independent satellite fixture avoids future-dating records on the Wi-Fi unit.
+      const body = { device_id: 'fixture-sat', name: 'ISOLATED satellite', lon: 152, lat: -33,
+        deployment: 'installed', location_note: 'Isolated test fixture', rock7_imei: '000000000000003', report_interval_s: 3600 };
+      await api('/api/devices', body);
+      const post = (csv, date = new Date()) => api(`/api/rock7?secret=${process.env.ROCK7_SECRET}`, {
+        imei: '000000000000003', transmit_time: date.toISOString().slice(2, 19).replace('T', ' '), data: Buffer.from(csv).toString('hex') });
+      assert.equal((await post('M2,1,1200,70,100,2,3600,400,100,100,0')).status, 200);
+      let p = (await sensors()).find((f) => f.properties.device_id === 'fixture-sat').properties;
+      assert.equal(p.state, 'flooded'); assert.equal(p.device_state, 'UNCLASSED'); assert.equal(p.closure.dv_product, .4);
+      assert.equal((await post('M,1,0,300,100,1,300,300,100,2')).status, 200);
+      p = (await sensors()).find((f) => f.properties.device_id === 'fixture-sat').properties;
+      assert.equal(p.state, 'flooded'); assert.equal(p.class_derived, true);
+      await post('M,1,0,0,0,1,0,0,100,0', new Date(Date.now() - 86400000));
+      assert.equal((await sensors()).find((f) => f.properties.device_id === 'fixture-sat').properties.state, 'flooded');
+    });
+    await check('bench closure never becomes a road closure or route hazard', async () => {
+      await api('/api/devices', { device_id: 'fixture-bench', name: 'Bench display only', lon: 151.75, lat: -32.4 });
+      await api('/api/ingest', { device: 'fixture-bench', class: 'CLOSED', depth: .8, vel: 1, dv: .8 }, 'device');
+      assert.ok(!(await closures()).some((f) => f.properties.device_id === 'fixture-bench'));
+      assert.ok(!(await route('today')).data.hazards.some((p) => p.device_id === 'fixture-bench'));
+    });
+    await check('delayed hazard after blind observation closes; legacy partial DV and metadata survive', async () => {
+      const r = await api('/api/devices', { device_id: 'fixture-order', name: 'Ordering fixture', lon: 154, lat: -34 });
+      const legacy = (body) => api('/api/ingest', { sensor_id: 'fixture-order', ...body }, { 'x-device-token': r.data.device_token });
+      const t = Date.now() - 10000;
+      await legacy({ state: 'dry', depth_mm: 0, ts: new Date(t).toISOString() });
+      await legacy({ state: 'unknown', ts: new Date(t + 2000).toISOString() });
+      await legacy({ state: 'hazard', depth_mm: 400, ts: new Date(t + 1000).toISOString() });
+      let p = (await sensors()).find((f) => f.properties.device_id === 'fixture-order').properties;
+      assert.equal(p.state, 'flooded'); assert.equal(p.depth_m, null);
+      await legacy({ state: 'dry', depth_mm: 0, ts: new Date(t + 3000).toISOString() });
+      await legacy({ dv_product: .4, hazard_class: 'H2', confidence: .9, rise_rate_mm_min: 4,
+        temp_c: 20, tilt_deg: 1, batt_v: 7.2, ts: new Date(t + 4000).toISOString() });
+      p = (await sensors()).find((f) => f.properties.device_id === 'fixture-order').properties;
+      assert.equal(p.state, 'flooded'); assert.equal(p.confidence, .9); assert.equal(p.hazard_class, 'H2');
+      assert.equal(p.battery_pct, 50);
+      // Numeric closure without a supplied state or hazard class.
+      await legacy({ state: 'dry', depth_mm: 0, ts: new Date(t + 5000).toISOString() });
+      await legacy({ dv_product: .3, ts: new Date(t + 6000).toISOString() });
+      assert.equal((await sensors()).find((f) => f.properties.device_id === 'fixture-order').properties.state, 'flooded');
+    });
+    await check('stale flooded state stays in closures and routing', async () => {
+      await db.query("UPDATE sensors SET observed_at=now()-interval '58 minutes',telemetry_src='sat' WHERE id=$1", [id]);
+      const p = await field(); assert.equal(p.stale, true); assert.equal(p.reporting, 'satellite_interval');
+      assert.ok((await closures()).some((f) => f.properties.id === id));
+      assert.ok((await route('mercuril')).data.avoided.some((p) => p.id === id));
+    });
+    await check('ineffective exclusion cannot claim successful avoidance', async () => {
+      ineffective = true;
+      await db.query('UPDATE sensors SET lon=lon+0.0001 WHERE id=$1', [id]);
+      const r = (await route('mercuril')).data;
+      assert.equal(r.avoidanceUnavailable, true); assert.deepEqual(r.avoided, []);
+      assert.ok(r.hazards.length); ineffective = false;
+    });
+    await check('projection failure returns 500 with the instrument payload retained', async () => {
+      await db.query(`ALTER TABLE sensor_closures RENAME TO sensor_closures_unavailable`);
+      const r = await wifi('CLOSED'); assert.equal(r.status, 500);
+      assert.equal((await db.query("SELECT class FROM telemetry WHERE device='fixture-field' ORDER BY id DESC LIMIT 1")).rows[0].class, 'CLOSED');
+      await db.query(`ALTER TABLE sensor_closures_unavailable RENAME TO sensor_closures`);
+    });
+    await check('bad secrets, invalid bodies and malformed JSON are kept in the net', async () => {
+      assert.equal((await api('/api/rock7?secret=invalid', { hello: 'rejected fixture' })).status, 401);
+      const r = await nativeFetch(base + '/api/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{broken' });
+      assert.equal(r.status, 400); assert.ok((await r.json()).kept);
+      assert.ok((await db.query('SELECT count(*)::int n FROM raw_hooks')).rows[0].n >= 4);
+    });
+    if (process.argv.includes('--browser')) {
+      await check('desktop/mobile map, live popup and admin labels render', async () => {
+        const { chromium } = require('/root/1000-projects-landing-page/node_modules/playwright-core');
+        browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
+        const page = await browser.newPage({ viewport: { width: 1365, height: 900 } });
+        const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+        // Local basemap for deterministic WebGL verification, no tile requests.
+        await page.route('**/map-style.js', (r) => r.fulfill({ contentType: 'application/javascript', body: 'async function googleishStyle(){return {version:8,sources:{},layers:[{id:"background",type:"background",paint:{"background-color":"#212c3b"}}]}}' }));
+        await page.goto(base + '/?scenario=dungog');
+        await page.locator('#btnMerc').click();
+        await page.waitForFunction(() => document.getElementById('sensorCounts').textContent.includes('installed'));
+        await page.waitForTimeout(500);
+        // Exercise the actual MapLibre click listener on the rendered closure.
+        await page.evaluate(() => {
+          const canvas = document.querySelector('.maplibregl-canvas');
+          // Fit bounds is fixed for the Dungog scenario at this viewport.
+          canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 930, clientY: 265 }));
+        });
+        await page.waitForSelector('.maplibregl-popup');
+        assert.match(await page.locator('.maplibregl-popup').innerText(), /Closed by MercuriL sensor/);
+        await page.screenshot({ path: '/tmp/mercuril-map-desktop.png' });
+        await page.locator('.maplibregl-popup-close-button').click();
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.screenshot({ path: '/tmp/mercuril-map-mobile.png' });
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await page.route('**/api/route?**', (r) => r.fulfill({ status: 502, contentType: 'application/json', body: '{"ok":false}' }));
+        await page.goto(base + '/?scenario=pitch');
+        await page.waitForFunction(() => document.getElementById('adTitle').textContent.includes('Route update unavailable'));
+        assert.match(await page.locator('#adBody').innerText(), /avoidance has not been verified/);
+        await page.goto(base + '/admin');
+        await page.waitForSelector('.sensor');
+        const card = page.locator('.sensor').filter({ hasText: 'ISOLATED TEST crossing' });
+        assert.equal(await card.locator('[data-toggle]').count(), 0);
+        assert.match(await card.innerText(), /Real MercuriL sensor/);
+        assert.deepEqual(errors, []);
+      });
+    }
+    console.log(`Verified ${checks} integration scenarios; all data stayed in an isolated schema.`);
+  } finally {
+    if (browser) await browser.close();
+    if (server) await new Promise((resolve) => server.close(resolve));
+    await db.end();
+    await control.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    await control.end();
+  }
+})().catch((e) => { console.error(e.stack); process.exitCode = 1; });

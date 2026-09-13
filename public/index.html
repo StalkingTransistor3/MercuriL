@@ -59,6 +59,12 @@
     <button id="btnMerc"><span class="mdot"></span>With MercuriL</button>
   </div>
 
+  <div class="sensor-legend" aria-live="polite">
+    <div><span class="legend-gov">●</span> Government record · <span class="legend-real">◉</span> Sensor closure · <span class="legend-sim">○</span> Simulated pin</div>
+    <div id="sensorCounts">Loading sensor status…</div>
+    <div id="modeNote">Today comparison · sensor avoidance disabled</div>
+  </div>
+
   <!-- Official-feed integrity counter (live, from the government's own data) -->
   <button class="feedstat hidden" id="feedstat" title="What the official feed actually says">
     <span class="fs-label">NSW official feed</span>
@@ -85,8 +91,7 @@
     <p class="tagline">The map that sees the flood.</p>
 
     <p>Navigation apps route drivers onto flooded roads because no data source tells them the road is gone. Australia's national closure feed is a daily harmonisation of state open data — built for planned roadworks, not for the crossing that went under an hour ago.</p>
-    <p><b>87% of fatal vehicle flood incidents happen at crossings</b> — causeways, bridges, dips. Nobody is standing there at 2am to report them.</p>
-    <p>MercuriL is a network of low-cost satellite-IoT depth sensors at exactly those crossings, feeding <b>verified, real-time closures</b> into the maps people already trust.</p>
+    <p>MercuriL is a prototype network of depth and velocity instruments with satellite backhaul. Reports from provisioned field units can automatically flag closures on this map and trigger a route around them.</p>
 
     <h2>What the official feed can and can't tell you</h2>
     <p>Australia has a national road-closure dataset, harmonised from state open data.
@@ -116,8 +121,16 @@
     <h2>What's real in this prototype</h2>
     <ul>
       <li><b>Real:</b> every grey dot — NSW closures/hazards from the federal Roadworks &amp; Road Closures dataset (refreshed daily), and routing on the real road network.</li>
-      <li><b>Simulated:</b> the sensors. The hardware is in prototyping — this shows the network exactly as it would behave.</li>
+      <li><b>Real instrument closures:</b> red double-ring pins from installed MercuriL units. Click for the triggering report, timestamp and D×V. These are instrument warnings, separate from government closure records.</li>
+      <li><b>Bench units:</b> real hardware at a labelled display position, with install coordinates pending. Bench reports do not close roads or affect routes.</li>
+      <li><b>Simulated:</b> brass-outline pins and devices labelled simulated. Their demonstration floods affect routes in “With MercuriL”; every route alert retains that label.</li>
+      <li><b>Today:</b> a comparison route with sensor avoidance disabled. It does not reproduce another navigation app's decisions.</li>
     </ul>
+
+    <h2>How closure warnings work</h2>
+    <p>Device WARNING or CLOSED reports hold a crossing closed. The server also closes at D×V ≥ 0.30 m²/s, using measured depth and velocity. Only a newer positive OPEN report below that trigger reopens it; missing, blind or overdue reports hold the closure. A neutral pin can mean unknown conditions.</p>
+    <p>Satellite reports can be hourly. Each popup shows the sample age and configured cadence. The 15-minute stale flag remains visible; it never clears a closure.</p>
+    <p class="ev-foot">The pilot trigger draws on the small-passenger-vehicle criteria discussed in Smith, Modra, Tucker &amp; Cox (2017), <a href="https://www.unsw.edu.au/content/dam/pdfs/engineering/civil-environmental/water-research-laboratory/publications/WRL-TR2017-07-Vehicle-Stability-Testing-for-Flood-Flows.pdf" target="_blank" rel="noopener">UNSW WRL TR 2017/07, Table ES-1</a>. Those criteria also include depth and velocity limits. This prototype does not implement a complete vehicle-stability model or give permission to enter floodwater.</p>
 
     <h2>Talk to us</h2>
     <form id="inqForm">
@@ -144,6 +157,7 @@
 
   <script src="/vendor/maplibre-gl.js"></script>
   <script src="/map-style.js"></script>
+  <script src="/sensor-display.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

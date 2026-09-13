@@ -1,14 +1,17 @@
-/* global maplibregl, googleishStyle */
+/* global maplibregl, googleishStyle, sensorDisplay */
 (() => {
   const $ = (id) => document.getElementById(id);
 
   // ---------- state ----------
   const state = {
-    mode: 'today', // 'today' | 'mercuril'
+    mode: new URLSearchParams(location.search).has('device') ? 'mercuril' : 'today',
+    focusedDevice: false,
     from: null, // { lon, lat, label }
     to: null,
     sensors: [], // last fetched sensor features
     sensorsFp: '',
+    popup: null,
+    popupSensorId: null,
     route: null, // last route response
     pulse: 0,
   };
@@ -160,19 +163,26 @@
       type: 'circle',
       source: 'sensors',
       paint: {
-        'circle-color': ['case', ['==', ['get', 'state'], 'flooded'], C.danger, C.jade],
+        'circle-color': ['case', ['==', ['get', 'state'], 'flooded'], C.danger, C.slate],
         'circle-radius': ['case', ['==', ['get', 'state'], 'flooded'], 9, 6.5],
         'circle-stroke-width': 2,
-        'circle-stroke-color': C.cream,
+        'circle-stroke-color': ['case', ['get', 'simulated'], C.brass, C.cream],
       },
     });
+
+    // A separate, unclustered closure layer: real installed devices only.
+    map.addSource('sensor-closures', { type: 'geojson', data: EMPTY });
+    map.addLayer({ id: 'sensor-closure-ring', type: 'circle', source: 'sensor-closures',
+      paint: { 'circle-radius': 14, 'circle-color': C.danger, 'circle-opacity': 0.22,
+        'circle-stroke-color': C.danger, 'circle-stroke-width': 3 } });
+    map.on('click', 'sensor-closure-ring', onSensorClick);
 
     map.on('moveend', refreshClosures);
     map.on('click', 'sensor-pt', onSensorClick);
     map.on('click', 'closures-pt', onClosureClick);
-    for (const l of ['sensor-pt', 'closures-pt'])
+    for (const l of ['sensor-pt', 'sensor-closure-ring', 'closures-pt'])
       map.on('mouseenter', l, () => (map.getCanvas().style.cursor = 'pointer'));
-    for (const l of ['sensor-pt', 'closures-pt'])
+    for (const l of ['sensor-pt', 'sensor-closure-ring', 'closures-pt'])
       map.on('mouseleave', l, () => (map.getCanvas().style.cursor = ''));
 
     refreshClosures();
@@ -201,17 +211,45 @@
   async function pollSensors() {
     try {
       const data = await (await fetch('/api/sensors')).json();
-      if (!data.features) return;
+      if (!data.features) throw new Error('Sensor data unavailable');
       state.sensors = data.features;
       map.getSource('sensors')?.setData(data);
+      map.getSource('sensor-closures')?.setData({ type: 'FeatureCollection', features: data.features.filter((f) =>
+        f.properties.provenance === 'real_sensor' && f.properties.state === 'flooded' && f.properties.closure) });
+      const counts = { real: 0, bench: 0, sim: 0 };
+      for (const f of data.features) counts[f.properties.simulated ? 'sim' : f.properties.deployment === 'installed' ? 'real' : 'bench']++;
+      $('sensorCounts').textContent = `${counts.real} installed · ${counts.bench} bench · ${counts.sim} simulated`;
+      $('sensorCounts').classList.remove('offline');
+      const wanted = new URLSearchParams(location.search).get('device');
+      if (wanted && !state.focusedDevice) {
+        const target = data.features.find((f) => f.properties.device_id === wanted);
+        if (target) {
+          state.focusedDevice = true;
+          map.flyTo({ center: target.geometry.coordinates, zoom: 12, duration: 0 });
+          onSensorClick({ features: [target] });
+        }
+      }
+      if (state.popup?.isOpen()) {
+        const f = data.features.find((f) => f.properties.id === state.popupSensorId);
+        if (f) state.popup.setHTML(sensorDisplay.popup(f.properties));
+        else state.popup.remove();
+      }
+      if (state.route) {
+        for (const k of ['hazards', 'avoided']) if (state.route[k]) state.route[k] = state.route[k].map((s) =>
+          data.features.find((f) => f.properties.id === s.id)?.properties || s);
+        renderAlerts(state.route);
+      }
       const fp = data.features
-        .map((f) => `${f.properties.id}:${f.properties.state}:${f.geometry.coordinates.join(',')}`)
+        .map((f) => `${f.properties.id}:${f.properties.state}:${f.properties.deployment}:${f.geometry.coordinates.join(',')}`)
         .join('|');
       if (fp !== state.sensorsFp) {
         state.sensorsFp = fp;
         if (state.from && state.to) fetchRoute(); // live re-route when a sensor floods
       }
-    } catch (_) {}
+    } catch (_) {
+      $('sensorCounts').textContent = 'Sensor updates unavailable · showing last received state';
+      $('sensorCounts').classList.add('offline');
+    }
   }
 
   // ---------- official-feed integrity numbers ----------
@@ -250,9 +288,10 @@
   // ---------- mode ----------
   function applyMode() {
     const merc = state.mode === 'mercuril';
+    $('modeNote').textContent = merc ? 'Sensor avoidance enabled · simulated hazards also affect demo routes' : 'Today comparison · sensor avoidance disabled';
     $('btnToday').classList.toggle('on', !merc);
     $('btnMerc').classList.toggle('on', merc);
-    for (const l of ['sensor-pt', 'sensor-halo'])
+    for (const l of ['sensor-pt', 'sensor-halo', 'sensor-closure-ring'])
       if (map.getLayer(l)) map.setLayoutProperty(l, 'visibility', merc ? 'visible' : 'none');
     if (state.from && state.to) fetchRoute();
     else renderAlerts(null);
@@ -268,12 +307,22 @@
     try {
       const url = `/api/route?from=${from.lon},${from.lat}&to=${to.lon},${to.lat}&mode=${state.mode}`;
       const data = await (await fetch(url)).json();
-      if (seq !== routeSeq || !data.ok) return;
+      if (seq !== routeSeq) return;
+      if (!data.ok) throw new Error('Routing unavailable');
       state.route = data;
       drawRoute(data);
       renderRouteCard(data);
       renderAlerts(data);
-    } catch (_) {}
+    } catch (_) {
+      if (seq !== routeSeq) return;
+      state.route = null;
+      $('rcNote').textContent = 'Route update unavailable';
+      $('alertGhost').classList.remove('show');
+      $('adTitle').textContent = '⚠ Route update unavailable';
+      $('adBody').textContent = 'The displayed route may cross a newly reported closure. Sensor avoidance has not been verified.';
+      $('adSub').textContent = 'Check the labelled map warnings and current reports.';
+      $('alertDanger').classList.add('show');
+    }
   }
 
   function drawRoute(r) {
@@ -339,47 +388,31 @@
     if (!r) return;
     if (state.mode === 'mercuril' && r.avoided?.length) {
       const s = r.avoided[0];
-      $('adTitle').textContent = '⚠ Flooded crossing ahead — rerouted';
-      $('adBody').innerHTML = `<b>${s.name}</b> is under <b>${Number(s.depth_m).toFixed(2)} m</b> of water. MercuriL detected it and closed the road in your app.`;
-      $('adSub').textContent = `New route adds ${Math.round(r.extraMin)} min. No one has to guess.`;
+      $('adTitle').textContent = r.avoided.some((s) => s.simulated) ? '⚠ Demo includes simulated flooding — rerouted' : '⚠ Sensor closure ahead — rerouted';
+      $('adBody').textContent = `${sensorDisplay.label(s)}: ${s.name}. ${s.simulated ? 'Demonstration flood; this route uses simulated hazard data.' : 'Instrument closure held on this route.'} Last depth: ${sensorDisplay.metric(s.depth_m, 'm')}.`;
+      $('adSub').textContent = `New route adds ${Math.round(r.extraMin)} min. ${sensorDisplay.freshness(s)}`;
       danger.classList.add('show');
     } else if (state.mode === 'mercuril' && r.avoidanceUnavailable) {
       $('adTitle').textContent = '⚠ Flooded crossing on this route';
-      $('adBody').textContent = 'Live rerouting is temporarily unavailable — the crossing is flagged on the map.';
+      $('adBody').textContent = `Avoidance could not be verified. This route still crosses a flagged hazard. ${(r.hazards || []).some((s) => s.simulated) ? 'Includes simulated hazard data.' : 'Real sensor closure.'}`;
       $('adSub').textContent = '';
       danger.classList.add('show');
     } else if (state.mode === 'today' && r.hazards?.length) {
       const s = r.hazards[0];
       $('agTitle').textContent = 'This is the route your map gives you today.';
-      $('agBody').innerHTML = `It crosses <b>${s.name}</b> — right now under ${Number(s.depth_m).toFixed(2)} m of water. The official feed has no sensor there, so the map shows the road as open.`;
+      $('agBody').textContent = `${sensorDisplay.label(s)}: ${s.name}. This comparison route ignores sensor closures. ${s.simulated ? 'The flood is simulated.' : sensorDisplay.freshness(s)}`;
       ghost.classList.add('show');
     }
   }
 
   // ---------- popups ----------
-  function sparkline(readings) {
-    if (!readings?.length) return '';
-    const w = 180, h = 36, max = Math.max(0.4, ...readings.map((r) => r.depth_m));
-    const pts = readings
-      .map((r, i) => `${((i / Math.max(1, readings.length - 1)) * w).toFixed(1)},${(h - (r.depth_m / max) * h).toFixed(1)}`)
-      .join(' ');
-    return `<svg class="pp-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${C.brass}" stroke-width="2"/></svg>`;
-  }
-
   function onSensorClick(e) {
-    const f = e.features[0];
-    const p = f.properties;
-    const readings = typeof p.readings === 'string' ? JSON.parse(p.readings) : p.readings || [];
-    const flooded = p.state === 'flooded';
-    new maplibregl.Popup({ offset: 12 })
-      .setLngLat(f.geometry.coordinates)
-      .setHTML(
-        `<div class="pp-name">${p.name}</div>
-         <div class="pp-state ${p.state}">${flooded ? `WATER OVER ROAD — ${Number(p.depth_m).toFixed(2)} m` : 'Road clear'}</div>
-         <div class="pp-meta">Live reading · battery ${p.battery_pct}%</div>
-         ${sparkline(readings)}`
-      )
-      .addTo(map);
+    // A overlapping demo/bench marker must not hide a real closure's evidence.
+    const f = (e.point && map.queryRenderedFeatures(e.point, { layers: ['sensor-closure-ring'] })[0]) || e.features[0];
+    state.popup?.remove();
+    state.popupSensorId = f.properties.id;
+    state.popup = new maplibregl.Popup({ offset: 16, maxWidth: '330px' })
+      .setLngLat(f.geometry.coordinates).setHTML(sensorDisplay.popup(f.properties)).addTo(map);
   }
 
   const DAY_MS = 86400000;
@@ -413,9 +446,9 @@
     new maplibregl.Popup({ offset: 10, maxWidth: '290px' })
       .setLngLat(e.features[0].geometry.coordinates)
       .setHTML(
-        `<div class="cl-cat">${p.category || 'Closure'} · official feed</div>
-         <div class="cl-desc">${p.description || p.type || ''}</div>
-         <div class="cl-street">${p.street || ''}</div>
+        `<div class="cl-cat">${sensorDisplay.esc(p.category || 'Closure')} · official feed</div>
+         <div class="cl-desc">${sensorDisplay.esc(p.description || p.type || '')}</div>
+         <div class="cl-street">${sensorDisplay.esc(p.street || '')}</div>
          ${provenanceNote(p)}`
       )
       .addTo(map);
