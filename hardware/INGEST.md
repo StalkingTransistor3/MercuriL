@@ -47,6 +47,14 @@ Server behaviour, all deliberate:
 array of records, oldest first (hours ≤ 336). `GET /api/telemetry/devices`
 lists every device ever heard with its last report.
 
+These reads and all browser pages require login. Server-side diagnostics can
+send `x-admin-key` for API reads; a device token authorizes reports only. The
+`hardware/probe.js` round-trip check loads `DEVICE_TOKEN` (or `TOKEN`) and
+`ADMIN_KEY` from the environment/local `.env`. It refuses to write a probe report
+if either credential is missing. Keep the admin key on the operator's server,
+never on an installed unit. Browser credentials are managed with `bin/access.cjs`
+(see the README).
+
 **See it:** `/telemetry` — depth/vel/dv against time with the class as a
 coloured band, battery on its own strip, reboot markers, satellite points
 ringed. Live-refreshes every 15 s.

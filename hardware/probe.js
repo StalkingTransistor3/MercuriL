@@ -2,7 +2,8 @@
  *
  *   node hardware/probe.js                 # probe production once
  *   node hardware/probe.js --watch         # re-probe every 15 s until green
- *   BASE=http://localhost:3000 TOKEN=x node hardware/probe.js
+ *   BASE=http://localhost:3000 node hardware/probe.js
+ * Uses DEVICE_TOKEN (or TOKEN) and ADMIN_KEY from the environment / local .env.
  *
  * Posts one reading as device "probe", then reads it back through
  * /api/series — a full round trip through the same path the real unit uses.
@@ -10,8 +11,10 @@
  * server down vs token missing vs wrong token vs write-ok-but-can't-read-back.
  */
 
+require('../lib/env').loadEnv();
 const BASE = (process.env.BASE || 'https://mercuril-production.up.railway.app').replace(/\/$/, '');
-const TOKEN = process.env.TOKEN || 'change-me';
+const TOKEN = process.env.TOKEN || process.env.DEVICE_TOKEN;
+const ADMIN_KEY = process.env.ADMIN_KEY;
 const WATCH = process.argv.includes('--watch');
 
 const ok = (m) => console.log(`  \x1b[32m✓\x1b[0m ${m}`);
@@ -20,6 +23,10 @@ const bad = (m) => console.log(`  \x1b[31m✗\x1b[0m ${m}`);
 async function probe() {
   console.log(`\nprobing ${BASE} @ ${new Date().toLocaleTimeString('en-AU', { hour12: false })}`);
   let alive = false, ingest = false, readback = false;
+  if (!TOKEN || !ADMIN_KEY) {
+    bad('Set DEVICE_TOKEN (or TOKEN) and ADMIN_KEY before probing. The admin key authenticates readback; do not put it on field devices.');
+    return false;
+  }
 
   // 1. is anyone home
   try {
@@ -52,7 +59,7 @@ async function probe() {
     } else if (r.status === 503) {
       bad('ingest OFF — DEVICE_TOKEN is not set on the server (Railway → Variables)');
     } else if (r.status === 401) {
-      bad(`ingest rejected the token — server has a DEVICE_TOKEN and it isn't "${TOKEN}"`);
+      bad('ingest rejected the device token — check the configured credential');
     } else {
       bad(`ingest failed: HTTP ${r.status} ${JSON.stringify(out)}`);
     }
@@ -63,7 +70,13 @@ async function probe() {
   // 3. can the plot read it back
   if (ingest) {
     try {
-      const r = await fetch(`${BASE}/api/series?device=probe&hours=1`, { signal: AbortSignal.timeout(10000) });
+      const r = await fetch(`${BASE}/api/series?device=probe&hours=1`, {
+        headers: { 'x-admin-key': ADMIN_KEY }, signal: AbortSignal.timeout(10000),
+      });
+      if (r.status === 401) {
+        bad('series readback needs a valid ADMIN_KEY — ingest may still be working');
+        return false;
+      }
       const rows = r.ok ? await r.json() : [];
       readback = Array.isArray(rows) && rows.length > 0;
       readback
