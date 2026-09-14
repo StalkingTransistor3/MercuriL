@@ -45,6 +45,10 @@ body {
 }
 #map { position: fixed; inset: 0; background: var(--ground); }
 .hidden { display: none !important; }
+.session-control { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 12px var(--font); color: var(--fg-2); padding: 10px 0; }
+.session-control button { padding: 8px 12px; min-height: 36px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--fg); font: 600 12px var(--font); cursor: pointer; }
+.session-control button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.session-control button:disabled { opacity: .6; cursor: wait; }
 
 ::selection { background: hsl(40 68% 62% / 0.3); }
 

@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test tests/sensor-state.test.cjs",
+    "test": "node --test --test-concurrency=1 tests/sensor-state.test.cjs tests/auth.test.cjs tests/auth-http.test.cjs",
     "test:integration": "node tests/integration.cjs --isolated-neon",
     "start": "node server.js",
     "dev": "node --watch server.js",

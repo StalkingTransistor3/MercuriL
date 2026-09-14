@@ -24,6 +24,67 @@ A Google-Maps-style web app (desktop + mobile) with one switch:
 
 Express + Neon Postgres · MapLibre GL + OpenFreeMap tiles (restyled toward the Google palette in `public/map-style.js`) · no build step, no frontend framework.
 
+## Login and access
+
+The app requires a username and password. `/login` is the entry point; the map,
+telemetry, admin/net pages, static app files and read APIs are protected on the
+server. Links such as `/?device=mercuril-01` resume after login. Each page has a
+Sign out control (on the map, open the About menu). An expired or revoked session
+returns the browser to login.
+
+Accounts are provisioned on the server; there is no public registration. One
+shared team account or separate named accounts use the same system. Run from
+this repository with its existing `DATABASE_URL`:
+
+```bash
+node bin/access.cjs create team --out /private/new-credentials.json
+node bin/access.cjs list
+node bin/access.cjs reset team --out /private/replacement-credentials.json
+node bin/access.cjs disable team
+```
+
+The output directory must already exist. `create` and `reset` generate a random
+password into a new file with mode 0600 outside this public repository. They never
+print it. `reset` also re-enables a disabled account. Resetting or disabling an
+account revokes its existing sessions. The CLI only creates the authentication
+tables; it does not seed devices, run ETL or insert telemetry.
+
+Passwords use salted scrypt hashes (N=32768, r=8, p=3). A random 256-bit session
+token is stored in an HttpOnly, SameSite=Lax cookie; only its SHA-256 hash is kept
+in Postgres. Sessions expire after seven days and survive app restarts. HTTPS
+cookies are Secure (always in production). Browser writes check the request's
+Origin, login attempts are limited, and password verification concurrency is
+capped at two. Login request bodies never enter the raw telemetry net. Pages and
+APIs are private/no-store and cannot be embedded in another site.
+
+There is no switch that silently opens the app if accounts or the database are
+missing. Provision an account before deploying the gate. Railway's existing
+single trusted reverse proxy and HTTPS endpoint remain the deployment model.
+The login rate limits are per process; scaling to multiple replicas should also
+move the attempt limiter to a shared store.
+
+### Machine endpoints
+
+These retain their existing contracts and do not require a browser cookie:
+
+- `GET /healthz`: minimal public uptime response for Railway.
+- `POST /api/ingest`: existing device-token authentication.
+- `POST /api/rock7`: existing optional `ROCK7_SECRET` and device mapping.
+- `POST /api/raw`: existing write-only catch-all, retaining unauthenticated
+  submissions with provenance. The login gate does not authenticate this feed.
+- `POST /api/devices`: existing `x-admin-key` provisioning authentication.
+
+An existing valid `x-admin-key` can also authenticate server-side API requests.
+Browser login grants viewing access; modifying sensors, provisioning devices,
+reading raw captures and refreshing ETL still require the existing admin key.
+Device tokens do not grant read access. Securing or rotating satellite/device
+credentials is separate from this browser gate and must be coordinated with the
+hardware to avoid interrupting reports.
+
+Design references: [Express security guidance](https://expressjs.com/en/advanced/best-practice-security/),
+[OWASP password storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+and [session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
+
 ```
 lib/db.js       schema + pool + demo-sensor seed (closures/sensors/readings/inquiries/etl_runs)
 lib/etl.js      ArcGIS -> Postgres sync (boot-if-stale + daily)
@@ -129,8 +190,15 @@ they do not prove a particular crossing has a viable live detour.
 
 `node tests/integration.cjs --isolated-neon --browser` also checks desktop/mobile
 WebGL rendering and admin controls using the droplet’s existing Playwright install.
+It covers unauthenticated pages/APIs, login, cookie flags, deep links, session
+revocation/expiry, login rate limiting and the complete browser login/logout flow.
+`node tests/access.cjs --isolated-neon` verifies the real account CLI in its own
+temporary schema, including password resets and private credential-file permissions.
 Screenshots are saved outside this repository in `/tmp`. `node tests/live-routing.cjs`
 checks the real routing service with an in-memory obstacle and no database writes.
+The opt-in production check is `node tests/login-live.cjs --credentials
+/private/credentials.json --browser`; it only reads the app and creates/revokes its
+own login sessions. It never sends test device reports.
 
 ## Run
 

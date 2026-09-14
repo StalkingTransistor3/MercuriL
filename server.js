@@ -12,6 +12,7 @@ const { runEtl, scheduleEtl } = require('./lib/etl');
 const { route } = require('./lib/routing');
 const { number: tnum, judgement, presentation, projectReport, reconcileAssessments } = require('./lib/sensor-state');
 const { assessReport } = require('./lib/flood-assessment');
+const { installAuth } = require('./lib/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,10 +35,7 @@ app.set('trust proxy', 1);
 
 app.use(
   helmet({
-    // Drop X-Frame-Options entirely so the demo can be iframed anywhere
-    // (Notion, Framer, judge links, buildclub.ai). Framing is governed by
-    // the CSP frame-ancestors directive below instead.
-    frameguard: false,
+    frameguard: { action: 'deny' },
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
@@ -56,12 +54,15 @@ app.use(
         // maplibre-gl runs its worker from a blob
         'worker-src': ["'self'", 'blob:'],
         'child-src': ["'self'", 'blob:'],
-        // Allow embedding on any parent page (overrides useDefaults' 'self').
-        'frame-ancestors': ['*'],
+        'frame-ancestors': ["'none'"],
       },
     },
   })
 );
+
+// Gate pages, assets and data before parsers/static serving. Device POSTs keep
+// their existing authentication and raw-payload retention behavior.
+installAuth(app, getPool);
 
 // /api/raw must see the body as untouched bytes, and must be mounted BEFORE
 // the JSON parser: express.json 400s on malformed JSON, and the whole point
@@ -70,7 +71,7 @@ app.use('/api/raw', express.raw({ type: () => true, limit: '256kb' }));
 app.use(express.json({ limit: '32kb' }));
 // Rock7 delivers satellite messages as form-encoded POSTs.
 app.use(express.urlencoded({ extended: false, limit: '32kb' }));
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], cacheControl: false }));
 
 // ---------- helpers ----------
 
@@ -909,7 +910,7 @@ if (require.main === module) (async () => {
     await reconcileAssessments(getPool());
     scheduleEtl();
   } catch (err) {
-    console.error('DB init failed (serving static only):', err.message);
+    console.error('DB init failed (application access remains gated):', err.message);
   }
   app.listen(PORT, () => console.log(`MercuriL prototype listening on ${PORT}`));
 })();

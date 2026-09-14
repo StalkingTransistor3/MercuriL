@@ -6,6 +6,7 @@ if (!process.argv.includes('--isolated-neon')) throw new Error('Pass --isolated-
 require('../lib/env').loadEnv();
 const { Pool } = require('pg');
 const { initDb } = require('../lib/db');
+const { hashPassword, hashToken, COOKIE } = require('../lib/auth');
 const schema = `bench_mercuril_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
 // Neon pooler rejects session startup search_path. Use its direct endpoint so
 // the isolated schema is enforced on every test connection, including locks.
@@ -46,6 +47,13 @@ global.fetch = async (url, options) => {
   return nativeFetch(url, options);
 };
 let server, base, browser, checks = 0;
+const loginPassword = crypto.randomBytes(24).toString('hex');
+async function login(password = loginPassword, extra = {}) {
+  return nativeFetch(base + '/auth/login', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base, ...extra.headers },
+    body: JSON.stringify({ username: 'fixture-user', password, next: '/?device=fixture-field', ...extra.body }) });
+}
+const cookieFrom = (response) => response.headers.get('set-cookie').split(';')[0];
 async function check(name, fn) { await fn(); checks++; console.log(`PASS ${name}`); }
 async function api(path, body, auth = 'admin', method) {
   const headers = { 'Content-Type': 'application/json' };
@@ -68,6 +76,71 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
     server = app.listen(0, '127.0.0.1');
     await new Promise((resolve) => server.on('listening', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
+    await db.query('INSERT INTO app_users(username,password_hash) VALUES ($1,$2)', ['fixture-user', await hashPassword(loginPassword)]);
+    let sessionCookie;
+    await check('all application pages, assets and read APIs require authentication', async () => {
+      for (const p of ['/', '/index.html', '/admin', '/admin.html', '/telemetry', '/telemetry.html', '/net', '/net.html', '/app.js', '/vendor/maplibre-gl.js']) {
+        const r = await nativeFetch(base + p, { redirect: 'manual' });
+        assert.equal(r.status, 302, p);
+        assert.match(r.headers.get('location'), /^\/login\?next=/);
+        assert.match(r.headers.get('cache-control'), /no-store/);
+      }
+      for (const p of ['/api/sensors', '/api/sensor-closures', '/api/closures', '/api/closures/stats', '/api/series', '/api/telemetry/devices', '/api/raw', '/api/route', '/api/geocode', '/api/etl/status', '/auth/session']) {
+        const r = await nativeFetch(base + p);
+        assert.equal(r.status, 401, p); assert.equal((await r.json()).code, 'LOGIN_REQUIRED');
+      }
+      assert.equal((await nativeFetch(base + '/healthz')).status, 200);
+      assert.equal((await nativeFetch(base + '/login.css')).status, 200);
+      const loginPage = await nativeFetch(base + '/login');
+      assert.equal(loginPage.status, 200);
+      assert.match(loginPage.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+      assert.equal(loginPage.headers.get('x-frame-options'), 'DENY');
+      assert.equal((await nativeFetch(base + '/api/sensors', { headers: { authorization: `Bearer ${process.env.DEVICE_TOKEN}` } })).status, 401);
+      assert.equal((await nativeFetch(base + '/api/sensors', { headers: { cookie: `${COOKIE}=invalid` } })).status, 401);
+    });
+    await check('login rejects cross-site requests and does not retain passwords in the raw net', async () => {
+      const count = (await db.query('SELECT count(*)::int n FROM raw_hooks')).rows[0].n;
+      assert.equal((await login(loginPassword, { headers: { Origin: 'https://evil.example' } })).status, 403);
+      assert.equal((await nativeFetch(base + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: '{"password":' })).status, 400);
+      assert.equal((await nativeFetch(base + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ password: 'x'.repeat(3000) }) })).status, 413);
+      assert.equal((await db.query('SELECT count(*)::int n FROM raw_hooks')).rows[0].n, count);
+      const bad = await login('incorrect');
+      const missing = await login('incorrect', { body: { username: 'missing-user' } });
+      assert.equal(bad.status, 401); assert.equal(missing.status, 401);
+      assert.deepEqual(await bad.json(), await missing.json());
+    });
+    await check('valid credentials create opaque persistent sessions and preserve deep links', async () => {
+      const r = await login(); assert.equal(r.status, 200);
+      assert.equal((await r.json()).next, '/?device=fixture-field');
+      sessionCookie = cookieFrom(r);
+      assert.match(r.headers.get('set-cookie'), /HttpOnly/);
+      assert.match(r.headers.get('set-cookie'), /SameSite=Lax/);
+      const token = sessionCookie.split('=')[1];
+      const stored = (await db.query('SELECT token_hash FROM app_sessions')).rows;
+      assert.equal(stored.length, 1); assert.equal(stored[0].token_hash, hashToken(token));
+      assert.notEqual(stored[0].token_hash, token);
+      assert.equal((await nativeFetch(base + '/', { headers: { Cookie: sessionCookie } })).status, 200);
+      assert.equal((await nativeFetch(base + '/api/sensors', { headers: { Cookie: sessionCookie } })).status, 200);
+      const user = await nativeFetch(base + '/auth/session', { headers: { Cookie: sessionCookie } });
+      assert.equal((await user.json()).username, 'fixture-user');
+      assert.equal((await nativeFetch(base + '/api/raw', { headers: { Cookie: sessionCookie } })).status, 401);
+      const mutation = await nativeFetch(base + '/api/sensors', { method: 'POST', headers: { Cookie: sessionCookie, Origin: 'https://evil.example' } });
+      assert.equal(mutation.status, 403);
+      const ssl = await login(loginPassword, { headers: { 'X-Forwarded-Proto': 'https', Origin: base.replace('http:', 'https:') }, body: { next: '//evil.example' } });
+      assert.equal(ssl.status, 200); assert.match(ssl.headers.get('set-cookie'), /Secure/); assert.equal((await ssl.json()).next, '/');
+    });
+    await check('logout revokes the server session; expiry and disabled accounts deny access', async () => {
+      assert.equal((await nativeFetch(base + '/auth/logout', { method: 'POST', headers: { Cookie: sessionCookie, Origin: 'https://evil.example' } })).status, 403);
+      const out = await nativeFetch(base + '/auth/logout', { method: 'POST', headers: { Cookie: sessionCookie, Origin: base } });
+      assert.equal(out.status, 200);
+      assert.equal((await nativeFetch(base + '/api/sensors', { headers: { Cookie: sessionCookie } })).status, 401);
+      const r = await login(); sessionCookie = cookieFrom(r);
+      await db.query('UPDATE app_users SET disabled=true WHERE username=$1', ['fixture-user']);
+      assert.equal((await nativeFetch(base + '/api/sensors', { headers: { Cookie: sessionCookie } })).status, 401);
+      await db.query('UPDATE app_users SET disabled=false WHERE username=$1', ['fixture-user']);
+      await db.query("UPDATE app_sessions SET expires_at=now()-interval '1 second'");
+      assert.equal((await nativeFetch(base + '/api/sensors', { headers: { Cookie: sessionCookie } })).status, 401);
+    });
     let id, token, trigger;
     await check('provisioning is unobserved; repeat preserves credentials', async () => {
       const body = { device_id: 'fixture-field', name: 'ISOLATED TEST crossing', lon: 151.75, lat: -32.4,
@@ -250,9 +323,19 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
         browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
         const page = await browser.newPage({ viewport: { width: 1365, height: 900 } });
         const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+        await page.goto(base + '/?scenario=dungog');
+        await page.waitForURL('**/login?next=**');
+        await page.screenshot({ path: '/tmp/mercuril-login-desktop.png' });
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.screenshot({ path: '/tmp/mercuril-login-mobile.png' });
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await page.setViewportSize({ width: 1365, height: 900 });
+        await page.locator('#username').fill('fixture-user');
+        await page.locator('#password').fill(loginPassword);
         // Local basemap for deterministic WebGL verification, no tile requests.
         await page.route('**/map-style.js', (r) => r.fulfill({ contentType: 'application/javascript', body: 'async function googleishStyle(){return {version:8,sources:{},layers:[{id:"background",type:"background",paint:{"background-color":"#212c3b"}}]}}' }));
-        await page.goto(base + '/?scenario=dungog');
+        await page.locator('#submit').click();
+        await page.waitForURL(base + '/?scenario=dungog');
         await page.locator('#btnMerc').click();
         await page.waitForFunction(() => document.getElementById('sensorCounts').textContent.includes('installed'));
         await page.waitForTimeout(500);
@@ -284,8 +367,18 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
         await page.waitForFunction(() => document.getElementById('roadDecision').textContent.includes('KEEP ROAD CLOSED'));
         assert.match(await page.locator('#roadDecision').innerText(), /Water depth/);
         assert.deepEqual(errors, []);
+        await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+        await page.waitForURL(base + '/login');
+        await page.goto(base + '/telemetry?device=fixture-field');
+        await page.waitForURL('**/login?next=**');
       });
     }
+    await check('login rate limiting bounds repeated guesses', async () => {
+      let response;
+      for (let i = 0; i < 11; i++) response = await login('bad', { headers: { 'X-Forwarded-For': '192.0.2.123' } });
+      assert.equal(response.status, 429);
+      assert.ok(response.headers.get('retry-after'));
+    });
     console.log(`Verified ${checks} integration scenarios; all data stayed in an isolated schema.`);
   } finally {
     if (browser) await browser.close();
