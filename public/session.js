@@ -24,7 +24,7 @@
   button.type = 'button'; button.textContent = 'Sign out';
   control.append(label, button);
   const host = document.querySelector('.about') || document.querySelector('.side header') || document.querySelector('.head');
-  if (host?.classList.contains('about')) host.querySelector('.tagline').after(control);
+  if (host?.classList.contains('about')) host.querySelector('h1').after(control);
   else if (host) host.append(control);
   button.addEventListener('click', async () => {
     button.disabled = true;

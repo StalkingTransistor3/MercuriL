@@ -285,14 +285,14 @@ function tipHTML(r) {
   const cls = CLASSES[r.class] || CLASSES.UNCAL;
   const rowsHtml = SERIES.map((sr) =>
     `<div class="row"><span><span class="sw" style="background:${sr.color}"></span>${sr.label}</span><span>${
-      r[sr.key] == null ? '—' : r[sr.key].toFixed(3) + ' ' + sr.unit}</span></div>`).join('');
+      r[sr.key] == null ? 'N/A' : r[sr.key].toFixed(3) + ' ' + sr.unit}</span></div>`).join('');
   return `<div class="t">${fmtFull(r.t)}</div>
     <div class="row"><span><span class="sw" style="background:${cls.strip}"></span>${esc(r.class)}</span><span>${esc(r.src)}</span></div>
     ${rowsHtml}
-    <div class="row"><span>echo</span><span>${r.echo_pct ?? '—'}%</span></div>
-    <div class="row"><span>range / dry</span><span>${r.range?.toFixed(3) ?? '—'} / ${r.dry?.toFixed(3) ?? '—'}</span></div>
-    <div class="row"><span>battery</span><span>${r.batPct != null ? r.batPct + '%' : '—'}${r.batV != null ? ' · ' + r.batV.toFixed(2) + 'V' : ''}</span></div>
-    <div class="row"><span>uptime</span><span>${r.uptime_s != null ? r.uptime_s + ' s' : '—'}</span></div>`;
+    <div class="row"><span>echo</span><span>${r.echo_pct != null ? r.echo_pct + '%' : 'N/A'}</span></div>
+    <div class="row"><span>range / dry</span><span>${r.range?.toFixed(3) ?? 'N/A'} / ${r.dry?.toFixed(3) ?? 'N/A'}</span></div>
+    <div class="row"><span>battery</span><span>${r.batPct != null ? r.batPct + '%' : 'N/A'}${r.batV != null ? ' · ' + r.batV.toFixed(2) + 'V' : ''}</span></div>
+    <div class="row"><span>uptime</span><span>${r.uptime_s != null ? r.uptime_s + ' s' : 'N/A'}</span></div>`;
 }
 
 function renderTiles() {
@@ -306,7 +306,7 @@ function renderTiles() {
   if (!last) { $('tiles').innerHTML = ''; return; }
   const cls = CLASSES[last.class] || CLASSES.UNCAL;
   const rb = reboots(state.rows).length;
-  const val = (v, f) => (v == null ? '—' : f(v));
+  const val = (v, f) => (v == null ? 'N/A' : f(v));
   $('tiles').innerHTML = `
     <div class="tile"><div class="k">Class</div>
       <div class="chip"><span class="dot" style="background:${cls.strip}"></span>${esc(last.class)}</div>
@@ -315,9 +315,9 @@ function renderTiles() {
     <div class="tile"><div class="k">Velocity</div><div class="v">${val(last.vel, (v) => v.toFixed(2))} <small>m/s</small></div></div>
     <div class="tile"><div class="k">D×V</div><div class="v">${val(last.dv, (v) => v.toFixed(3))} <small>m²/s</small></div>
       <div class="m">one of three WRL closure checks</div></div>
-    <div class="tile"><div class="k">Battery</div><div class="v">${val(last.batPct, (v) => v)}<small>%</small></div>
+    <div class="tile"><div class="k">Battery</div><div class="v">${val(last.batPct, (v) => `${v}<small>%</small>`)}</div>
       <div class="m">${last.batV != null ? last.batV.toFixed(2) + ' V' : ''}</div></div>
-    <div class="tile"><div class="k">Link</div><div class="v" style="font-size:15px">fw ${esc(last.fw ?? '—')}</div>
+    <div class="tile"><div class="k">Link</div><div class="v" style="font-size:15px">fw ${esc(last.fw ?? 'N/A')}</div>
       <div class="m">${state.rows.length} reports · ${rb} reboot${rb === 1 ? '' : 's'}</div></div>`;
 }
 
@@ -328,7 +328,7 @@ function renderTable() {
   $('rawtable').innerHTML = `<table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${
     rows.map((r) => `<tr>${cols.map((c) => {
       let v = c === 'received_at' ? fmtFull(r.t) : r[c];
-      return `<td>${v == null ? '—' : esc(typeof v === 'number' ? +v.toFixed(4) : v)}</td>`;
+      return `<td>${v == null ? 'N/A' : esc(typeof v === 'number' ? +v.toFixed(4) : v)}</td>`;
     }).join('')}</tr>`).join('')}</tbody></table>`;
 }
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MercuriL — mission control</title>
+  <title>MercuriL | mission control</title>
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#283648">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23283648'/%3E%3Ccircle cx='12' cy='12' r='6.5' fill='none' stroke='%23D74242' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23F3EFE8'/%3E%3C/svg%3E">
@@ -25,7 +25,7 @@
     .side header { padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
     .side h1 { font-family: var(--display); font-size: 22px; font-weight: 400; }
     .side h1 .l { color: var(--danger); }
-    .side .hint { font-size: 12px; color: var(--fg-3); margin-top: 6px; line-height: 1.5; }
+    .side .admin-links { font-size: 12px; color: var(--fg-3); margin-top: 6px; line-height: 1.5; }
     .etl { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--fg-3); display:flex; align-items:center; gap:10px; }
     .etl button { border: 1px solid var(--line); background: transparent; color: var(--fg-2); border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
     .etl button:hover { background: var(--hover-strong); color: var(--fg); }
@@ -77,8 +77,7 @@
   <div class="side">
     <header>
       <h1>Mercuri<span class="l">L</span> mission control</h1>
-      <div class="hint"><a href="/admin/access">Account approvals</a> · <a href="/net">Raw reports</a></div>
-      <div class="hint">Click the map to add a sensor · drag to move · toggle to flood/clear. The public app reacts within 5 s.</div>
+      <div class="admin-links"><a href="/admin/access">Account approvals</a> · <a href="/net">Raw reports</a></div>
     </header>
     <div class="etl" id="etl">
       <span id="etlStatus">…</span>

@@ -31,7 +31,9 @@ let cookie, adminCookie, browser;
     const setCookie = login.headers.get('set-cookie');
     assert.ok(setCookie.includes('HttpOnly') && setCookie.includes('Secure') && setCookie.includes('SameSite=Lax'));
     cookie = setCookie.split(';')[0];
-    for (const [route, file] of [['/', 'public/index.html'], ['/telemetry', 'public/telemetry.html'],
+    for (const [route, file] of [['/', 'public/index.html'], ['/app.js', 'public/app.js'], ['/ui.css', 'public/ui.css'],
+      ['/telemetry', 'public/telemetry.html'], ['/telemetry.js', 'public/telemetry.js'],
+      ['/login', 'auth/login.html'], ['/admin/login', 'auth/admin-login.html'],
       ['/signup', 'auth/signup.html'], ['/signup.js', 'auth/signup.js'], ['/session.js', 'public/session.js'], ['/login.js', 'auth/login.js'], ['/login.css', 'auth/login.css']]) {
       const response = await fetch(base + route, { headers: { Cookie: cookie } });
       assert.equal(response.status, 200, `Authenticated ${route}`);
@@ -95,6 +97,7 @@ let cookie, adminCookie, browser;
         await page.screenshot({ path: '/tmp/mercuril-approvals-production.png' });
         await page.goto(base + '/net');
         await page.waitForFunction(() => document.getElementById('live').textContent.includes('caught'));
+        await page.screenshot({ path: '/tmp/mercuril-net-production.png' });
         await page.getByRole('button', { name: 'Sign out', exact: true }).click();
         await page.waitForURL(base + '/admin/login');
         assert.deepEqual(errors, []);

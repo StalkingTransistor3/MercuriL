@@ -250,6 +250,9 @@ node server.js         # first boot ingests ~103k NSW records (~40 s)
 
 ## Copy doctrine
 
+Interface copy has no subtitles or taglines and uses no em dashes (Andrew,
+15 September 2026). Keep functional labels, status messages and evidence visible.
+
 Site copy stays impersonal and factual. Katya's personal story lives in the
 stage pitch only — never on the website (decided 2026-07-06: putting it in
 marketing copy cheapens it). Keep her bio to credentials. The About panel's

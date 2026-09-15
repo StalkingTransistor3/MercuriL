@@ -289,7 +289,6 @@ body {
 .about h1 { font-family: var(--display); font-size: 34px; font-weight: 400; line-height: 1.1; margin-bottom: 4px; }
 .logo-m { color: var(--fg); }
 .logo-l { color: var(--brass); }
-.tagline { font-family: var(--display); font-style: italic; color: var(--fg-3); font-size: 16px; margin-bottom: 18px; }
 .about p { font-size: 14px; line-height: 1.6; margin: 10px 0; color: var(--fg-2); }
 .about p b { color: var(--fg); font-weight: 600; }
 .about h2 {

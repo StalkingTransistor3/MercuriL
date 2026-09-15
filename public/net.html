@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MercuriL — the net</title>
+  <title>MercuriL | the net</title>
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#283648">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23283648'/%3E%3Ccircle cx='12' cy='12' r='6.5' fill='none' stroke='%23D74242' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23F3EFE8'/%3E%3C/svg%3E">
@@ -17,7 +17,6 @@
     .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
     .head h1 { font-family: var(--display); font-weight: 400; font-size: 26px; }
     .head h1 .l { color: var(--danger); }
-    .head .sub { font-size: 13px; color: var(--fg-3); }
     .head .live { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
     .keyrow { display: flex; gap: 8px; margin: 14px 0 18px; }
     .keyrow input {
@@ -29,7 +28,6 @@
       border: 0; border-radius: var(--radius); background: var(--brass); color: var(--bg);
       font: 600 13px var(--font); padding: 9px 16px; cursor: pointer;
     }
-    .note { font-size: 12.5px; color: var(--fg-4); margin-bottom: 16px; }
     .catch { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
     .catch.fresh { border-color: hsl(40 68% 62% / .6); }
     .c-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
@@ -47,13 +45,10 @@
   <script src="/session.js" defer></script>
   <div class="wrap">
     <div class="head">
-      <h1>Mercuri<span class="l">L</span> — the net</h1>
-      <span class="sub">everything caught raw, newest first</span>
+      <h1>Mercuri<span class="l">L</span> · the net</h1>
       <span class="live" id="live"></span>
     </div>
-    <div class="note">Payloads land here when they match no known format — plus every rejected or
-      unparseable post, tagged with why. RockBLOCK deliveries get their hex auto-decoded below.
-      Decoded telemetry lives on the <a href="/telemetry" style="color:var(--brass)">plot</a>.</div>
+
     <div id="list"><div class="empty">Loading raw reports…</div></div>
     <footer>Refreshes every 10 s. <a href="/telemetry">telemetry</a> · <a href="/admin">mission control</a> · <a href="/">map</a></footer>
   </div>

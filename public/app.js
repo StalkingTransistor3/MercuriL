@@ -388,7 +388,7 @@
     if (!r) return;
     if (state.mode === 'mercuril' && r.avoided?.length) {
       const s = r.avoided[0];
-      $('adTitle').textContent = r.avoided.some((s) => s.simulated) ? '⚠ Demo includes simulated flooding — rerouted' : '⚠ Sensor closure ahead — rerouted';
+      $('adTitle').textContent = r.avoided.some((s) => s.simulated) ? '⚠ Rerouted around simulated flooding' : '⚠ Rerouted around a sensor closure';
       $('adBody').textContent = `${sensorDisplay.label(s)}: ${s.name}. ${s.simulated ? 'Demonstration flood; this route uses simulated hazard data.' : (s.assessment?.reason || 'Instrument closure held on this route.')}`;
       $('adSub').textContent = `New route adds ${Math.round(r.extraMin)} min. ${sensorDisplay.freshness(s)}`;
       danger.classList.add('show');
@@ -437,7 +437,7 @@
       return `<div class="cl-flag warn">⚠ No end date recorded.</div>
               <div class="cl-age">${reported}</div>`;
     }
-    return `<div class="cl-flag ok">✓ Has an end date — ${fmtDate(p.to)}</div>
+    return `<div class="cl-flag ok">✓ Has an end date: ${fmtDate(p.to)}</div>
             <div class="cl-age">${reported}</div>`;
   }
 
@@ -562,7 +562,7 @@
         }),
       });
       const data = await resp.json();
-      status.textContent = data.ok ? 'Thanks — we’ll be in touch.' : 'Something went wrong. Try again?';
+      status.textContent = data.ok ? 'Thanks. We’ll be in touch.' : 'Something went wrong. Try again?';
       status.style.color = data.ok ? C.jade : C.danger;
       if (data.ok) $('inqForm').reset();
     } catch (_) {

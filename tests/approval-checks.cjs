@@ -119,7 +119,7 @@ module.exports = async function ({ db, adminPassword, cli, directory }) {
       assert.equal(await operator.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await operator.screenshot({ path: '/tmp/mercuril-approvals-mobile.png' });
       await operator.getByRole('button', { name: `Approve ${browserEmail}`, exact: true }).click();
-      await operator.waitForFunction(() => document.getElementById('message').textContent.includes('they can now sign in'));
+      await operator.waitForFunction(() => document.getElementById('message').textContent.includes('They can now sign in'));
       // A protected session endpoint is enough to prove admission; this schema
       // deliberately contains no road or device data.
       await member.locator('#submit').click();

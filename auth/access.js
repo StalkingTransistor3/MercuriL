@@ -50,7 +50,7 @@
     try {
       await request('/auth/admin/users/decision', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user.username, action, expected_status: user.access_status, expected_disabled: user.disabled }) });
-      await refresh(); status(`${user.email || user.username}: ${action === 'approve' ? 'approved — they can now sign in.' : action === 'reject' ? 'request rejected.' : 'access disabled.'}`);
+      await refresh(); status(`${user.email || user.username}: ${action === 'approve' ? 'approved. They can now sign in.' : action === 'reject' ? 'request rejected.' : 'access disabled.'}`);
     } catch (error) { status(error.message, true); await refresh().catch(() => {}); }
     finally { busy = false; document.querySelectorAll('button').forEach((b) => b.disabled = false); }
   }

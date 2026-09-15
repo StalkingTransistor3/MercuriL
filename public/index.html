@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>MercuriL — the map that sees the flood</title>
+  <title>MercuriL</title>
   <meta name="description" content="Live prototype: real NSW road-closure data + the MercuriL flood-sensor network. Toggle to see what your map is missing.">
   <meta name="theme-color" content="#283648">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23283648'/%3E%3Ccircle cx='12' cy='12' r='6.5' fill='none' stroke='%23E0B45C' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23F3EFE8'/%3E%3C/svg%3E">
@@ -89,18 +89,17 @@
   <div class="about hidden" id="about">
     <button class="about-close" id="aboutClose" aria-label="Close">✕</button>
     <h1><span class="logo-m">Mercuri</span><span class="logo-l">L</span></h1>
-    <p class="tagline">The map that sees the flood.</p>
 
-    <p>Navigation apps route drivers onto flooded roads because no data source tells them the road is gone. Australia's national closure feed is a daily harmonisation of state open data — built for planned roadworks, not for the crossing that went under an hour ago.</p>
+    <p>Navigation apps route drivers onto flooded roads because no data source tells them the road is gone. Australia's national closure feed is a daily harmonisation of state open data, built for planned roadworks, not for the crossing that went under an hour ago.</p>
     <p>MercuriL is a prototype network of depth and velocity instruments with satellite backhaul. Reports from provisioned field units can automatically flag closures on this map and trigger a route around them.</p>
 
     <h2>What the official feed can and can't tell you</h2>
     <p>Australia has a national road-closure dataset, harmonised from state open data.
       These are its own numbers for flood-relevant NSW records that present as currently
-      in force — computed live, from dates in the source, at every page load.</p>
+      in force. Counts are computed live from source dates at every page load.</p>
     <table class="evidence">
       <tr><td class="ev-n" id="abListed">–</td><td>flood-relevant records presenting as in force</td></tr>
-      <tr><td class="ev-n ok" id="abDated">–</td><td>of those carry an <b>end date</b> — a closure you could plan a drive around</td></tr>
+      <tr><td class="ev-n ok" id="abDated">–</td><td>of those carry an <b>end date</b>: a closure you could plan a drive around</td></tr>
       <tr><td class="ev-n warn" id="abOpenEnded">–</td><td>have <b>no end date</b>, reported within the last year</td></tr>
       <tr><td class="ev-n warn" id="abAbandoned">–</td><td>have <b>no end date and are over a year old</b>, still listed as in force today</td></tr>
       <tr><td class="ev-n" id="abRecent">–</td><td>were first reported in the last seven days</td></tr>
@@ -110,7 +109,7 @@
       Last synced from the federal feed: <b id="abSync">–</b>.</p>
     <p>This is not negligence, and the councils and agencies filing these records are
       not the problem. It is what happens when the only record of a flooded crossing is
-      a form somebody fills in during an emergency, at night, in the rain — and there is
+      a form somebody fills in during an emergency, at night, in the rain, and there is
       no instrument anywhere that closes it out when the water goes down.</p>
     <p>So the dataset does the honest thing and leaves the record open. Which means it
       can tell you a crossing <i>went</i> under. It cannot tell you whether it is under
@@ -121,7 +120,7 @@
 
     <h2>What's real in this prototype</h2>
     <ul>
-      <li><b>Real:</b> every grey dot — NSW closures/hazards from the federal Roadworks &amp; Road Closures dataset (refreshed daily), and routing on the real road network.</li>
+      <li><b>Real:</b> grey dots show NSW closures/hazards from the federal Roadworks &amp; Road Closures dataset (refreshed daily). Routes use the real road network.</li>
       <li><b>Real instrument closures:</b> red double-ring pins from installed MercuriL units. Click for the triggering report, timestamp and D×V. These are instrument warnings, separate from government closure records.</li>
       <li><b>Bench units:</b> real hardware at a labelled display position, with install coordinates pending. Bench reports do not close roads or affect routes.</li>
       <li><b>Simulated:</b> brass-outline pins and devices labelled simulated. Their demonstration floods affect routes in “With MercuriL”; every route alert retains that label.</li>
