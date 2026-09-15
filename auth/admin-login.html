@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#283648">
-  <title>Sign in — MercuriL</title>
+  <title>Admin sign in — MercuriL</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/login.css">
   <script src="/login.js" defer></script>
@@ -13,24 +13,21 @@
 <body>
   <main class="login-card">
     <div class="wordmark" aria-label="MercuriL">Mercuri<span>L</span></div>
-    <p class="tagline">The map that sees the flood.</p>
+    <p class="tagline">Admin console</p>
     <div class="divider"></div>
-    <h1>Sign in</h1>
-    <p class="intro">Sign in after your account has been approved.</p>
-    <form id="loginForm" method="post" action="/auth/login">
-      <label for="username">Email or username</label>
-      <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" required autofocus>
-      <label for="password">Password</label>
+    <h1>Admin sign in</h1>
+    <p class="intro">Approve account requests and manage access.</p>
+    <form id="loginForm" data-admin="true" method="post" action="/auth/admin/login">
+      <input name="username" value="admin" autocomplete="username" hidden>
+      <label for="password">Admin password</label>
       <div class="password-field">
-        <input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required>
+        <input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required autofocus>
         <button class="reveal" id="reveal" type="button" aria-label="Show password" aria-pressed="false">Show</button>
       </div>
       <p class="error" id="error" role="alert" aria-live="polite"></p>
       <button class="submit" id="submit" type="submit">Sign in</button>
     </form>
-    <noscript><p class="error">Please enable JavaScript to sign in.</p></noscript>
-    <p class="help">Need access? <a href="/signup">Create an account</a></p>
-    <p class="help"><a href="/admin/access">Admin console</a></p>
+    <p class="help"><a href="/login">Back to member sign in</a></p>
   </main>
 </body>
 </html>

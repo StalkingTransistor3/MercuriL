@@ -76,13 +76,14 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
     server = app.listen(0, '127.0.0.1');
     await new Promise((resolve) => server.on('listening', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
-    await db.query('INSERT INTO app_users(username,password_hash) VALUES ($1,$2)', ['fixture-user', await hashPassword(loginPassword)]);
+    const passwordHash = await hashPassword(loginPassword);
+    await db.query("INSERT INTO app_users(username,password_hash,access_status,is_admin) VALUES ('fixture-user',$1,'approved',false),('admin',$1,'approved',true)", [passwordHash]);
     let sessionCookie;
     await check('all application pages, assets and read APIs require authentication', async () => {
       for (const p of ['/', '/index.html', '/admin', '/admin.html', '/telemetry', '/telemetry.html', '/net', '/net.html', '/app.js', '/vendor/maplibre-gl.js']) {
         const r = await nativeFetch(base + p, { redirect: 'manual' });
         assert.equal(r.status, 302, p);
-        assert.match(r.headers.get('location'), /^\/login\?next=/);
+        assert.match(r.headers.get('location'), /^\/(?:admin\/)?login\?next=/);
         assert.match(r.headers.get('cache-control'), /no-store/);
       }
       for (const p of ['/api/sensors', '/api/sensor-closures', '/api/closures', '/api/closures/stats', '/api/series', '/api/telemetry/devices', '/api/raw', '/api/route', '/api/geocode', '/api/etl/status', '/auth/session']) {
@@ -359,6 +360,10 @@ const route = (mode, suffix = '') => api(`/api/route?from=151.7,-32.4&to=151.8,-
         await page.waitForFunction(() => document.getElementById('adTitle').textContent.includes('Route update unavailable'));
         assert.match(await page.locator('#adBody').innerText(), /avoidance has not been verified/);
         await page.goto(base + '/admin');
+        await page.waitForURL('**/admin/login?next=**');
+        await page.locator('#password').fill(loginPassword);
+        await page.locator('#submit').click();
+        await page.waitForURL(base + '/admin');
         await page.waitForSelector('.sensor');
         const card = page.locator('.sensor').filter({ hasText: 'ISOLATED TEST crossing' });
         assert.equal(await card.locator('[data-toggle]').count(), 0);

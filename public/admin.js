@@ -2,22 +2,10 @@
     (async () => {
       const $ = (id) => document.getElementById(id);
 
-      // --- admin key ---
-      let KEY = new URLSearchParams(location.search).get('key') || localStorage.getItem('mercuril_admin_key') || '';
-      if (new URLSearchParams(location.search).get('key')) {
-        localStorage.setItem('mercuril_admin_key', KEY);
-        history.replaceState(null, '', '/admin');
-      }
-      function askKey() {
-        $('keybar').style.display = 'grid';
-        $('keyGo').onclick = () => {
-          KEY = $('keyInput').value.trim();
-          localStorage.setItem('mercuril_admin_key', KEY);
-          $('keybar').style.display = 'none';
-          refresh();
-        };
-      }
-      const H = () => ({ 'Content-Type': 'application/json', 'x-admin-key': KEY });
+      // The server requires an approved admin session for this page and its writes.
+      if (new URLSearchParams(location.search).has('key')) history.replaceState(null, '', '/admin');
+      const H = () => ({ 'Content-Type': 'application/json' });
+      function showFailure() { toast('Request failed. Refresh the page and try again.'); }
 
       function toast(msg) {
         const t = $('toast');
@@ -62,7 +50,7 @@
             m.on('dragend', async () => {
               const p = m.getLngLat();
               await fetch(`/api/sensors/${s.id}`, { method: 'PATCH', headers: H(), body: JSON.stringify({ lon: p.lng, lat: p.lat }) })
-                .then(r => r.ok ? toast(`Moved: ${s.name}`) : askKey());
+                .then(r => r.ok ? toast(`Moved: ${s.name}`) : showFailure());
               refresh();
             });
             markers.set(s.id, m);
@@ -99,7 +87,7 @@
             const flooding = s.state !== 'flooded';
             const body = flooding ? { state: 'flooded', depth_m: s.depth_m > 0.05 ? s.depth_m : 0.62 } : { state: 'clear', depth_m: 0 };
             const r = await fetch(`/api/sensors/${s.id}`, { method: 'PATCH', headers: H(), body: JSON.stringify(body) });
-            if (!r.ok) return askKey();
+            if (!r.ok) return showFailure();
             toast(flooding ? `🌊 ${s.name} FLOODED` : `✓ ${s.name} clear`);
             refresh();
           };
@@ -108,7 +96,7 @@
           r.onchange = async () => {
             const id = Number(r.dataset.depth);
             const resp = await fetch(`/api/sensors/${id}`, { method: 'PATCH', headers: H(), body: JSON.stringify({ depth_m: Number(r.value) }) });
-            if (!resp.ok) return askKey();
+            if (!resp.ok) return showFailure();
             refresh();
           };
         });
@@ -117,7 +105,7 @@
             const s = sensors.find((x) => x.id === Number(b.dataset.del));
             if (!confirm(`Delete sensor "${s.name}"?`)) return;
             const r = await fetch(`/api/sensors/${s.id}`, { method: 'DELETE', headers: H() });
-            if (!r.ok) return askKey();
+            if (!r.ok) return showFailure();
             toast(`Deleted ${s.name}`);
             refresh();
           };
@@ -132,7 +120,7 @@
           headers: H(),
           body: JSON.stringify({ name, lon: e.lngLat.lng, lat: e.lngLat.lat }),
         });
-        if (!r.ok) return askKey();
+        if (!r.ok) return showFailure();
         toast(`Added ${name}`);
         refresh();
       });
@@ -140,13 +128,12 @@
       $('etlBtn').onclick = async () => {
         $('etlStatus').textContent = 'Syncing… (~40 s)';
         const r = await fetch('/api/etl/refresh', { method: 'POST', headers: H() });
-        if (!r.ok) { askKey(); return; }
+        if (!r.ok) { showFailure(); return; }
         const d = await r.json();
         toast(d.ok ? `Synced ${d.records.toLocaleString()} records` : `ETL: ${d.error}`);
         refresh();
       };
 
-      if (!KEY) askKey();
       refresh();
       setInterval(refresh, 10000);
     })();

@@ -22,4 +22,10 @@ button { font: inherit; cursor: pointer; }
 .submit:hover { background: #edc774; }
 .submit:disabled { opacity: .65; cursor: wait; }
 .help { text-align: center; font-size: 12px; margin: 23px 0 0; }
+a { color: #edc774; text-underline-offset: 3px; }
+.field-help { margin: 8px 0 0; font-size: 12px; color: #d0cec8; line-height: 1.5; }
+.success { padding: 18px; margin-top: 20px; background: #223d3b; border: 1px solid #8eb8a6; border-radius: 8px; line-height: 1.6; }
+.success h2 { font-size: 19px; margin: 0 0 8px; }
+.success p { font-size: 14px; margin: 0 0 12px; }
+[hidden] { display: none !important; }
 @media (max-width: 440px) { .login-card { padding: 28px 24px; } }

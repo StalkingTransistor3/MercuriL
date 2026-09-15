@@ -1,0 +1,33 @@
+body { height: auto; min-height: 100svh; padding: 28px 20px 40px; overflow-y: auto; }
+.access-wrap { max-width: 1000px; margin: 0 auto; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.wordmark { font: 34px Georgia, serif; letter-spacing: -1px; }
+.wordmark span { color: var(--danger); }
+.eyebrow { margin-top: 6px; font-size: 12px; color: var(--fg-2); }
+.admin-nav { display: flex; gap: 22px; flex-wrap: wrap; margin: 26px 0 32px; padding-bottom: 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
+a { color: var(--fg-2); text-decoration: none; }
+a:hover, a[aria-current] { color: var(--brass); }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+h1 { font-size: 26px; margin: 0 0 10px; }
+.page-heading p, .footnote { color: var(--fg-2); font-size: 14px; line-height: 1.6; }
+button { background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 10px 14px; min-height: 42px; font: 600 13px var(--font); cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+button:disabled { opacity: .55; cursor: wait; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 28px; }
+.filters button { background: transparent; }
+.filters button[aria-pressed=true] { border-color: var(--brass); color: var(--brass); background: var(--surface); }
+.filters span { margin-left: 8px; font-variant-numeric: tabular-nums; }
+#message { min-height: 24px; margin: 16px 0; color: var(--brass); font-size: 14px; line-height: 1.5; }
+#message.error { color: #ffb5ac; }
+.account { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 21px; margin: 12px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.account-info { min-width: 0; }
+.account h2 { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; margin-bottom: 10px; }
+.account p { font-size: 12px; line-height: 1.7; color: var(--fg-2); }
+.account-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+.approve { background: var(--brass); border-color: var(--brass); color: var(--bg); }
+.reject, .disable { color: #ffb5ac; }
+.empty { padding: 45px 24px; border: 1px dashed var(--line); border-radius: 10px; color: var(--fg-2); text-align: center; line-height: 1.6; }
+.pagination { display: flex; gap: 12px; justify-content: flex-end; margin: 18px 0; }
+.footnote { margin-top: 26px; font-size: 12px; }
+[hidden] { display: none !important; }
+@media(max-width: 600px) { body { padding: 22px 16px; } .account { align-items: stretch; flex-direction: column; gap: 16px; } .account-actions button { flex: 1; } .head { gap: 10px; } .page-heading { align-items: flex-start; } .admin-nav { gap: 14px; } }

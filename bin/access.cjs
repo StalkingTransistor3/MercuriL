@@ -11,12 +11,15 @@ const { AUTH_SCHEMA, hashPassword, normalizeUsername } = require('../lib/auth');
 async function main() {
   const [action, input, flag, output] = process.argv.slice(2);
   const username = normalizeUsername(input);
-  if (!['create', 'reset', 'disable', 'list'].includes(action) || (action !== 'list' && !username) ||
-      (['create', 'reset'].includes(action) && (flag !== '--out' || !output))) {
-    throw new Error('Usage: node bin/access.cjs create|reset USERNAME --out /private/new-file.json\n       node bin/access.cjs disable USERNAME\n       node bin/access.cjs list');
+  const creates = ['create', 'create-admin'].includes(action);
+  if (!['create', 'create-admin', 'reset', 'disable', 'list'].includes(action) || (action !== 'list' && !username) ||
+      ((creates || action === 'reset') && (flag !== '--out' || !output))) {
+    throw new Error('Usage: node bin/access.cjs create|create-admin|reset USERNAME --out /private/new-file.json\n       node bin/access.cjs disable USERNAME\n       node bin/access.cjs list');
   }
+  if (action === 'create-admin' && username !== 'admin') throw new Error('The password-only admin console uses the reserved username admin');
+  if (action === 'create' && username === 'admin') throw new Error('Use create-admin to provision the admin console');
   let target, password, passwordHash;
-  if (['create', 'reset'].includes(action)) {
+  if (creates || action === 'reset') {
     if (!path.isAbsolute(output)) throw new Error('--out must be an absolute path outside this repository');
     const parent = fs.realpathSync(path.dirname(output));
     target = path.join(parent, path.basename(output));
@@ -34,13 +37,13 @@ async function main() {
     db = await pool.connect();
     await db.query(AUTH_SCHEMA);
     if (action === 'list') {
-      const { rows } = await db.query('SELECT username, disabled, created_at FROM app_users ORDER BY username');
+      const { rows } = await db.query('SELECT username, email, access_status, is_admin, disabled, created_at FROM app_users ORDER BY username');
       console.log(JSON.stringify(rows, null, 2));
       return;
     }
     await db.query('BEGIN');
-    if (action === 'create') {
-      await db.query('INSERT INTO app_users(username, password_hash) VALUES ($1,$2)', [username, passwordHash]);
+    if (creates) {
+      await db.query("INSERT INTO app_users(username, password_hash, access_status, is_admin) VALUES ($1,$2,'approved',$3)", [username, passwordHash, action === 'create-admin']);
     } else {
       const result = action === 'disable'
         ? await db.query('UPDATE app_users SET disabled=true WHERE username=$1', [username])
@@ -48,7 +51,7 @@ async function main() {
       if (result.rowCount !== 1) throw new Error('Account not found');
       await db.query('DELETE FROM app_sessions WHERE username=$1', [username]);
     }
-    if (target) fs.writeFileSync(target, JSON.stringify({ url: 'https://mercuril-production.up.railway.app/login', username, password }, null, 2) + '\n', { mode: 0o600 });
+    if (target) fs.writeFileSync(target, JSON.stringify({ url: `https://mercuril-production.up.railway.app/${username === 'admin' ? 'admin/login' : 'login'}`, username, password }, null, 2) + '\n', { mode: 0o600 });
     await db.query('COMMIT');
     console.log(`Account ${username}: ${action} completed.${target ? ` Credentials saved privately to ${target}` : ' Existing sessions revoked.'}`);
   } catch (err) {

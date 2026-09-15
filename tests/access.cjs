@@ -50,9 +50,22 @@ async function cli(...args) {
     assert.equal(listed.length, 1); assert.equal(listed[0].username, 'fixture-team');
     assert.equal('password_hash' in listed[0], false);
     console.log('PASS real account CLI: create, duplicate rejection, private files, disable, session revocation, reset and list');
+    const adminFile = path.join(directory, 'admin.json');
+    await cli('create-admin', 'admin', '--out', adminFile);
+    const admin = JSON.parse(fs.readFileSync(adminFile, 'utf8'));
+    const adminRow = (await db.query("SELECT is_admin,access_status FROM app_users WHERE username='admin'")).rows[0];
+    assert.equal(adminRow.is_admin, true); assert.equal(adminRow.access_status, 'approved');
+    const appDb = new Pool({ connectionString: testUrl.toString(), ssl: { rejectUnauthorized: false }, max: 2 });
+    try { await require('./approval-checks.cjs')({ db: appDb, adminPassword: admin.password, cli, directory }); }
+    finally { await appDb.end(); }
   } finally {
     await db.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
     await db.end();
     fs.rmSync(directory, { recursive: true, force: true });
   }
-})().catch(() => { console.error('Account CLI test failed; credentials and database errors suppressed'); process.exitCode = 1; });
+})().catch((error) => {
+  console.error(`Account checks failed (${error.code || error.name}); credential values suppressed`);
+  const frame = String(error.stack).split('\n').find((line) => /at .*\/tests\//.test(line));
+  if (frame) console.error(frame.trim());
+  process.exitCode = 1;
+});

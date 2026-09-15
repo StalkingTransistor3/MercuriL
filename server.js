@@ -76,6 +76,7 @@ app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], c
 // ---------- helpers ----------
 
 async function requireAdmin(req, res, next) {
+  if (req.user?.is_admin) return next();
   if (!ADMIN_KEY || req.get('x-admin-key') !== ADMIN_KEY) {
     if (req.path === '/api/devices' && req.method === 'POST') {
       const kept = await keepInNet(req, 'provision-rejected:bad-admin-key', JSON.stringify(req.body), req.body);

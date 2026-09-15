@@ -7,7 +7,6 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-let KEY = localStorage.getItem('mercuril-net-key') || '';
 let lastTopId = null;
 let timer = null;
 
@@ -41,14 +40,12 @@ function renderBody(r) {
 
 async function poll() {
   try {
-    const res = await fetch('/api/raw?hours=168&limit=50', { headers: { 'x-admin-key': KEY } });
+    const res = await fetch('/api/raw?hours=168&limit=50', {});
     if (res.status === 401) {
-      $('list').innerHTML = '<div class="empty">Wrong key.</div>';
-      localStorage.removeItem('mercuril-net-key');
+      location.replace('/admin/login?next=%2Fnet');
       return;
     }
     const rows = await res.json();
-    $('keyrow').style.display = 'none';
     $('live').textContent = `${rows.length} caught · checked ${new Date().toLocaleTimeString('en-AU', { hour12: false })}`;
     if (!rows.length) {
       $('list').innerHTML = '<div class="empty">Net is empty. Whatever arrives next is kept.</div>';
@@ -72,13 +69,5 @@ async function poll() {
   }
 }
 
-function start() {
-  if (!KEY) return;
-  localStorage.setItem('mercuril-net-key', KEY);
-  poll();
-  if (!timer) timer = setInterval(() => { if (!document.hidden) poll(); }, 10_000);
-}
-
-$('go').addEventListener('click', () => { KEY = $('key').value.trim(); start(); });
-$('key').addEventListener('keydown', (e) => { if (e.key === 'Enter') { KEY = $('key').value.trim(); start(); } });
-if (KEY) { $('key').value = KEY; start(); }
+poll();
+timer = setInterval(() => { if (!document.hidden) poll(); }, 10_000);

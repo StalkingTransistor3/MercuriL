@@ -77,6 +77,7 @@
   <div class="side">
     <header>
       <h1>Mercuri<span class="l">L</span> mission control</h1>
+      <div class="hint"><a href="/admin/access">Account approvals</a> · <a href="/net">Raw reports</a></div>
       <div class="hint">Click the map to add a sensor · drag to move · toggle to flood/clear. The public app reacts within 5 s.</div>
     </header>
     <div class="etl" id="etl">
@@ -87,13 +88,6 @@
     <footer><a href="/?scenario=pitch" target="_blank">Open public app (pitch scenario) ↗</a></footer>
   </div>
   <div id="map"></div>
-  <div class="keybar hidden" id="keybar" style="display:none">
-    <div class="box">
-      <h2>Admin key</h2>
-      <input id="keyInput" type="password" placeholder="ADMIN_KEY">
-      <button id="keyGo">Enter</button>
-    </div>
-  </div>
   <div class="toast" id="toast"></div>
 
   <script src="/vendor/maplibre-gl.js"></script>

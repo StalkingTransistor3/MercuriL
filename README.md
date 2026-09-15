@@ -32,29 +32,54 @@ server. Links such as `/?device=mercuril-01` resume after login. Each page has a
 Sign out control (on the map, open the About menu). An expired or revoked session
 returns the browser to login.
 
-Accounts are provisioned on the server; there is no public registration. One
-shared team account or separate named accounts use the same system. Run from
-this repository with its existing `DATABASE_URL`:
+### Sign-up and approval
+
+People register at `/signup` with their email and a password of at least 16
+characters. Their account stays **pending**, with no login session, until an
+admin approves it. Sign-in with the correct password explains pending, rejected
+or disabled status. Duplicate sign-ups never overwrite an account's password.
+Email addresses are submitted by applicants; this flow does not send verification
+or approval emails. People return to `/login` to check their access and sign in.
+
+The password-only admin sign-in is `/admin/login`. The separate `admin` account
+opens `/admin/access`, where pending requests can be approved or rejected, approved
+accounts disabled, and rejected/disabled accounts approved again. Decisions record
+the reviewing admin and time in `app_access_events`. Stale decisions return a
+conflict instead of silently overwriting another review. Reject/disable revokes
+the user's existing sessions. Applicants cannot set their own role or approval.
+
+An admin session also opens mission control (`/admin`) and raw reports (`/net`),
+including their protected actions, without entering the machine API key. Member
+accounts cannot open those pages or the approval API. Admin sessions expire after
+12 hours; member sessions after seven days. Existing operator-created accounts
+(including the shared team account) remain approved and keep their passwords.
+
+Provision the admin password or recover access from this repository with the
+existing `DATABASE_URL`:
 
 ```bash
 node bin/access.cjs create team --out /private/new-credentials.json
+node bin/access.cjs create-admin admin --out /private/admin-credentials.json
 node bin/access.cjs list
+node bin/access.cjs reset admin --out /private/new-admin-credentials.json
 node bin/access.cjs reset team --out /private/replacement-credentials.json
 node bin/access.cjs disable team
 ```
 
-The output directory must already exist. `create` and `reset` generate a random
+The output directory must already exist. Creation and reset commands generate a random
 password into a new file with mode 0600 outside this public repository. They never
-print it. `reset` also re-enables a disabled account. Resetting or disabling an
+print it. `reset` re-enables a disabled account but preserves its approval status;
+resetting a pending or rejected applicant does not approve them. The CLI's explicit
+`create` command provisions approved operator accounts. Resetting or disabling an
 account revokes its existing sessions. The CLI only creates the authentication
 tables; it does not seed devices, run ETL or insert telemetry.
 
 Passwords use salted scrypt hashes (N=32768, r=8, p=3). A random 256-bit session
 token is stored in an HttpOnly, SameSite=Lax cookie; only its SHA-256 hash is kept
-in Postgres. Sessions expire after seven days and survive app restarts. HTTPS
+in Postgres. Sessions survive app restarts. HTTPS
 cookies are Secure (always in production). Browser writes check the request's
-Origin, login attempts are limited, and password verification concurrency is
-capped at two. Login request bodies never enter the raw telemetry net. Pages and
+Origin, login and sign-up attempts are limited, and password hashing concurrency is
+capped at two. Authentication request bodies never enter the raw telemetry net. Pages and
 APIs are private/no-store and cannot be embedded in another site.
 
 There is no switch that silently opens the app if accounts or the database are
@@ -75,8 +100,9 @@ These retain their existing contracts and do not require a browser cookie:
 - `POST /api/devices`: existing `x-admin-key` provisioning authentication.
 
 An existing valid `x-admin-key` can also authenticate server-side API requests.
-Browser login grants viewing access; modifying sensors, provisioning devices,
-reading raw captures and refreshing ETL still require the existing admin key.
+Member login grants viewing access. Browser administration requires the admin
+session; machine administration can still use the existing API key. That API key
+does not authorize the account approval API, which requires an admin session.
 Device tokens do not grant read access. Securing or rotating satellite/device
 credentials is separate from this browser gate and must be coordinated with the
 hardware to avoid interrupting reports.
@@ -194,11 +220,15 @@ It covers unauthenticated pages/APIs, login, cookie flags, deep links, session
 revocation/expiry, login rate limiting and the complete browser login/logout flow.
 `node tests/access.cjs --isolated-neon` verifies the real account CLI in its own
 temporary schema, including password resets and private credential-file permissions.
+Add `--browser` to verify email sign-up, pending denial, admin approval, member
+sign-in, disabling and session revocation through the actual desktop/mobile UI.
 Screenshots are saved outside this repository in `/tmp`. `node tests/live-routing.cjs`
 checks the real routing service with an in-memory obstacle and no database writes.
 The opt-in production check is `node tests/login-live.cjs --credentials
 /private/credentials.json --browser`; it only reads the app and creates/revokes its
-own login sessions. It never sends test device reports.
+own login sessions. Add `--admin-credentials /private/admin-credentials.json` to
+check the deployed approval console and admin session. It does not approve real
+applicants or send test device reports.
 
 ## Run
 

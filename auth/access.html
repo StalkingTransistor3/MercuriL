@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#283648">
+  <title>Account approvals — MercuriL</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/ui.css">
+  <link rel="stylesheet" href="/access.css">
+  <script src="/session.js" defer></script>
+  <script src="/access.js" defer></script>
+</head>
+<body>
+  <main class="access-wrap">
+    <header class="head">
+      <div><div class="wordmark">Mercuri<span>L</span></div><p class="eyebrow">Admin console</p></div>
+    </header>
+    <nav class="admin-nav" aria-label="Admin pages">
+      <a href="/admin/access" aria-current="page">Account approvals</a>
+      <a href="/admin">Mission control</a><a href="/net">Raw reports</a><a href="/">Map</a>
+    </nav>
+    <div class="page-heading"><div><h1>Account access</h1><p>Review requests before people can sign in to MercuriL.</p></div><button id="refresh" type="button">Refresh</button></div>
+    <div class="filters" role="group" aria-label="Account status">
+      <button type="button" data-status="pending" aria-pressed="true">Pending <span id="count-pending">0</span></button>
+      <button type="button" data-status="approved" aria-pressed="false">Approved <span id="count-approved">0</span></button>
+      <button type="button" data-status="rejected" aria-pressed="false">Rejected <span id="count-rejected">0</span></button>
+      <button type="button" data-status="disabled" aria-pressed="false">Disabled <span id="count-disabled">0</span></button>
+    </div>
+    <p id="message" role="status" aria-live="polite"></p>
+    <div id="accounts" aria-label="Accounts"><p class="empty">Loading accounts…</p></div>
+    <div class="pagination"><button id="previous" type="button" hidden>Previous</button><button id="more" type="button" hidden>Next</button></div>
+    <p class="footnote">New accounts stay pending until approved. Disabling access signs that account out of every session.</p>
+  </main>
+</body>
+</html>

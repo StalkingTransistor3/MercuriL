@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { hashPassword, verifyPassword, safeNext, normalizeUsername } = require('../lib/auth');
+const { hashPassword, verifyPassword, safeNext, normalizeUsername, normalizeEmail } = require('../lib/auth');
 
 test('password hashes use unique salts and reject incorrect or malformed credentials', async () => {
   const password = 'isolated-test-passphrase';
@@ -11,6 +11,13 @@ test('password hashes use unique salts and reject incorrect or malformed credent
   assert.equal(await verifyPassword(password, 'broken'), false);
   assert.equal(await verifyPassword({ password }, first), false);
   await assert.rejects(hashPassword('short'));
+});
+
+test('signup email validation normalizes case and preserves plus addressing', () => {
+  assert.equal(normalizeEmail('  Person+pilot@Example.COM '), 'person+pilot@example.com');
+  for (const value of ['admin', 'a@localhost', 'a@@example.com', '.a@example.com', 'a..b@example.com', 'a@-example.com', 'a@exam_ple.com', 'a'.repeat(65)+'@example.com', {}, null]) assert.equal(normalizeEmail(value), '');
+  const email = 'a'.repeat(64) + '@' + 'b'.repeat(63) + '.example.com';
+  assert.equal(normalizeUsername(email), email);
 });
 
 test('return links preserve local deep links and reject external redirects', () => {

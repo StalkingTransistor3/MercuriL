@@ -4,6 +4,7 @@
   const error = document.getElementById('error');
   const submit = document.getElementById('submit');
   const params = new URLSearchParams(location.search);
+  const admin = form.dataset.admin === 'true';
   if (params.get('expired') === '1') error.textContent = 'Your session has ended. Please sign in again.';
   document.getElementById('reveal').addEventListener('click', (event) => {
     const show = password.type === 'password';
@@ -18,8 +19,8 @@
     submit.textContent = 'Signing in…';
     error.textContent = '';
     try {
-      const response = await fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: form.elements.username.value, password: password.value, next: params.get('next') || '/' }) });
+      const response = await fetch(admin ? '/auth/admin/login' : '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: admin ? undefined : form.elements.username.value, password: password.value, next: params.get('next') || (admin ? '/admin/access' : '/') }) });
       const result = await response.json();
       if (!response.ok) { error.textContent = result.error || 'Could not sign in. Please try again.'; password.focus(); return; }
       password.value = '';
